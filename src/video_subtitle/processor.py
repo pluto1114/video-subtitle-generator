@@ -1,6 +1,7 @@
 """Main video processor that orchestrates the subtitle generation pipeline."""
 
 import logging
+import time
 from pathlib import Path
 from typing import Optional, Callable
 from .config import Config, SubtitleFormat
@@ -26,6 +27,8 @@ class VideoProcessor:
         self.model_cache = ModelCache()
         self.asr_engine: Optional[ASREngine] = None
         self.progress_callback: Optional[Callable[[str, float], None]] = None
+        self._start_time: Optional[float] = None
+        self._last_progress_time: Optional[float] = None
 
     def set_progress_callback(
         self, callback: Optional[Callable[[str, float], None]]
@@ -39,8 +42,29 @@ class VideoProcessor:
 
     def _report_progress(self, stage: str, progress: float) -> None:
         """Report progress to callback if set."""
+        current_time = time.time()
+        
+        if progress == 0.0:
+            self._start_time = current_time
+            self._last_progress_time = current_time
+        
         if self.progress_callback:
-            self.progress_callback(stage, progress)
+            elapsed_str = ""
+            if self._start_time and progress > 0:
+                elapsed = current_time - self._start_time
+                if progress < 100:
+                    estimated_total = elapsed / (progress / 100)
+                    remaining = estimated_total - elapsed
+                    if remaining > 60:
+                        elapsed_str = f" | 已用：{elapsed:.0f}s | 剩余：{remaining:.0f}s"
+                    else:
+                        elapsed_str = f" | 已用：{elapsed:.0f}s | 剩余：{remaining:.0f}s"
+                else:
+                    elapsed_str = f" | 总耗时：{elapsed:.0f}s"
+            
+            stage_with_time = f"{stage}{elapsed_str}"
+            self.progress_callback(stage_with_time, progress)
+            self._last_progress_time = current_time
 
     def process_video(self, video_path: str) -> Subtitle:
         """Process a single video file and generate subtitles.
@@ -55,50 +79,60 @@ class VideoProcessor:
         if not video_path.exists():
             raise FileNotFoundError(f"Video file not found: {video_path}")
 
-        logger.info(f"Processing video: {video_path}")
-        self._report_progress("准备", 0.0)
+        logger.info(f"🎬 开始处理视频：{video_path.name}")
+        self._report_progress("📋 准备处理", 0.0)
 
         temp_audio_path = None
         enhanced_audio_path = None
 
         try:
-            self._report_progress("提取音频", 10.0)
+            self._report_progress("🎵 提取音频", 10.0)
+            logger.info("正在从视频中提取音频...")
             temp_audio_path = self.audio_processor.extract_audio(str(video_path))
-            logger.info(f"Audio extracted to: {temp_audio_path}")
+            logger.info(f"✅ 音频提取完成：{Path(temp_audio_path).name}")
 
-            self._report_progress("音频增强", 20.0)
+            self._report_progress("🔊 音频增强", 20.0)
             if (
                 self.config.audio_enhance_profile
                 and self.config.audio_enhance_profile != "off"
             ):
+                logger.info(f"正在应用音频增强配置：{self.config.audio_enhance_profile.value}")
                 enhanced_audio_path = self.audio_processor.enhance_audio(
                     temp_audio_path, profile=self.config.audio_enhance_profile
                 )
                 audio_path = enhanced_audio_path
-                logger.info(f"Audio enhanced: {enhanced_audio_path}")
+                logger.info(f"✅ 音频增强完成")
             else:
                 audio_path = temp_audio_path
-                logger.info("Skipping audio enhancement")
+                logger.info("⏭️ 跳过音频增强")
 
-            self._report_progress("语音识别", 30.0)
+            self._report_progress("🎙️ 加载模型", 30.0)
             if self.asr_engine is None:
+                logger.info("正在加载语音识别模型...")
                 self._load_asr_engine()
+                logger.info("✅ 模型加载完成")
 
+            self._report_progress("🗣️ 语音识别", 40.0)
             subtitle = self.asr_engine.transcribe(
                 audio_path,
                 language=self.config.model_config.language,
                 model_path=self.config.model_config.local_model_path,
             )
-            logger.info(f"Transcription completed with {len(subtitle.segments)} segments")
+            logger.info(f"✅ 语音识别完成，生成 {len(subtitle.segments)} 条字幕")
 
-            self._report_progress("后处理", 80.0)
+            self._report_progress("✨ 后处理", 80.0)
+            logger.info("正在优化字幕时间轴...")
             self._post_process_subtitle(subtitle)
+            logger.info("✅ 后处理完成")
 
-            self._report_progress("完成", 100.0)
+            self._report_progress("💾 保存结果", 90.0)
+            logger.info("准备保存字幕文件...")
+
+            self._report_progress("✅ 全部完成", 100.0)
             return subtitle
 
         except Exception as e:
-            logger.error(f"Error processing video: {e}")
+            logger.error(f"❌ 处理失败：{e}")
             raise
         finally:
             self._cleanup_temp_files(temp_audio_path, enhanced_audio_path)
@@ -113,6 +147,10 @@ class VideoProcessor:
             "min_speech_duration_ms": self.config.vad_config.vad_min_speech_ms,
             "max_speech_duration_s": self.config.vad_config.vad_max_speech_s,
         } if self.config.use_vad else {}
+        
+        logger.info(f"正在初始化 ASR 引擎：{engine_type}")
+        logger.info(f"模型名称：{self.config.model_config.model_name}")
+        logger.info(f"设备：{self.config.model_config.device}")
         
         self.asr_engine = self.model_cache.get_or_load(
             engine_type=engine_type,
@@ -131,16 +169,22 @@ class VideoProcessor:
             condition_on_previous_text=False,
             prompt_reset_on_temperature=0.5,
         )
-        logger.info(f"ASR engine loaded: {engine_type}")
+        logger.info(f"✅ ASR 引擎初始化成功：{engine_type}")
 
     def _post_process_subtitle(self, subtitle: Subtitle) -> None:
         """Apply post-processing to the subtitle."""
+        logger.info("正在修复时间轴...")
         subtitle.fix_timestamps()
+        logger.info("正在移除无效片段...")
         subtitle.remove_invalid_segments(min_duration_ms=30, min_text_length=0)
+        logger.info("正在移除拟声词片段...")
         removed_count = subtitle.remove_onomatopoeia_segments()
-        logger.info(f"Removed {removed_count} onomatopoeia segments")
+        if removed_count > 0:
+            logger.info(f"移除了 {removed_count} 条拟声词片段")
+        else:
+            logger.info("无需移除拟声词片段")
         if not subtitle.validate_timestamps():
-            logger.warning("Subtitle timestamps validation failed after fixing")
+            logger.warning("⚠️ 字幕时间轴验证失败")
 
     def _cleanup_temp_files(
         self, *paths: Optional[str]
@@ -192,15 +236,18 @@ class VideoProcessor:
         fmt = subtitle_format or self.config.subtitle_format
         if fmt == SubtitleFormat.SRT:
             content = subtitle.to_srt()
+            logger.info(f"正在生成 SRT 格式字幕...")
         elif fmt == SubtitleFormat.ASS:
             content = subtitle.to_ass()
+            logger.info(f"正在生成 ASS 格式字幕...")
         else:
             raise ValueError(f"Unknown subtitle format: {fmt}")
 
+        logger.info(f"正在写入文件：{output_path.name}")
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-        logger.info(f"Subtitle saved to: {output_path}")
+        logger.info(f"✅ 字幕已保存：{output_path}")
         return str(output_path)
 
     def process_batch(
@@ -219,10 +266,12 @@ class VideoProcessor:
         """
         results = []
         total = len(video_paths)
+        
+        logger.info(f"🎬 开始批量处理，共 {total} 个视频文件")
 
         for i, video_path in enumerate(video_paths):
-            logger.info(f"Processing {i + 1}/{total}: {video_path}")
-            self._report_progress(f"处理中 {i + 1}/{total}", (i / total) * 100)
+            logger.info(f"📹 处理进度：{i + 1}/{total} - {Path(video_path).name}")
+            self._report_progress(f"📹 处理中：{i + 1}/{total}", (i / total) * 100)
 
             subtitle = self.process_video(video_path)
 
@@ -235,6 +284,8 @@ class VideoProcessor:
                 subtitle, str(output_path), video_path=video_path
             )
             results.append((video_path, subtitle_path))
+            logger.info(f"✅ 已完成 {i + 1}/{total}")
 
-        self._report_progress("批量处理完成", 100.0)
+        self._report_progress("✅ 批量处理完成", 100.0)
+        logger.info(f"🎉 批量处理完成，共处理 {len(results)} 个文件")
         return results

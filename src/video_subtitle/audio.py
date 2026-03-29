@@ -1,11 +1,14 @@
 """Audio processing module for extraction and enhancement."""
 
+import logging
 import subprocess
 import tempfile
 import os
 from pathlib import Path
 from typing import Optional
 from .config import AudioEnhanceProfile
+
+logger = logging.getLogger(__name__)
 
 
 class AudioProcessor:
@@ -63,6 +66,9 @@ class AudioProcessor:
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        logger.info(f"正在提取音频...")
+        logger.info(f"采样率：{sample_rate}Hz, 声道：{channels}")
+        
         cmd = [
             "ffmpeg",
             "-i",
@@ -94,6 +100,7 @@ class AudioProcessor:
         if not output_path.exists():
             raise RuntimeError("Audio extraction failed: output file not created")
 
+        logger.info(f"✅ 音频提取成功")
         return str(output_path)
 
     def enhance_audio(
@@ -125,6 +132,9 @@ class AudioProcessor:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         filter_complex = self._build_filter_chain(profile)
+        
+        logger.info(f"正在应用音频增强：{profile.value}")
+        logger.info(f"滤波器链：{filter_complex}")
 
         cmd = [
             "ffmpeg",
@@ -152,6 +162,7 @@ class AudioProcessor:
         if not output_path.exists():
             raise RuntimeError("Audio enhancement failed: output file not created")
 
+        logger.info(f"✅ 音频增强完成")
         return str(output_path)
 
     def _build_filter_chain(self, profile: AudioEnhanceProfile) -> str:

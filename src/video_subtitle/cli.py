@@ -18,7 +18,7 @@ from .config_manager import ConfigManager
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format="%(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -223,7 +223,10 @@ def main(args: Optional[list[str]] = None) -> int:
         processor = VideoProcessor(config)
 
         def progress_callback(stage: str, progress: float):
-            print(f"\r[{stage}] {progress:.1f}%", end="", flush=True)
+            bar_width = 30
+            filled = int(bar_width * progress / 100)
+            bar = "█" * filled + "░" * (bar_width - filled)
+            print(f"\r[{bar}] {progress:5.1f}% - {stage}", end="", flush=True)
 
         processor.set_progress_callback(progress_callback)
 
@@ -234,16 +237,16 @@ def main(args: Optional[list[str]] = None) -> int:
                 parsed_args.output_dir or str(video_paths[0].parent),
                 video_path=str(video_paths[0]),
             )
-            print(f"\nSubtitle saved to: {output_path}")
+            print(f"\n✅ 字幕已保存：{output_path}")
         else:
             output_dir = parsed_args.output_dir or str(video_paths[0].parent)
             results = processor.process_batch(
                 [str(p) for p in video_paths],
                 output_dir=output_dir,
             )
-            print(f"\nProcessed {len(results)} videos:")
+            print(f"\n✅ 批量处理完成，共处理 {len(results)} 个视频:")
             for video_path, subtitle_path in results:
-                print(f"  {Path(video_path).name} -> {Path(subtitle_path).name}")
+                print(f"  ✓ {Path(video_path).name} -> {Path(subtitle_path).name}")
 
         return 0
 

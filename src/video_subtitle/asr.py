@@ -1,10 +1,13 @@
 """ASR (Automatic Speech Recognition) engine module."""
 
+import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Optional
 from .subtitle import Subtitle
 from .config import ModelConfig
+
+logger = logging.getLogger(__name__)
 
 
 class ASREngine(ABC):
@@ -107,6 +110,7 @@ class FasterWhisperEngine(ASREngine):
             import warnings
             import sys
             
+            logger.info("🔍 正在检查 CUDA 环境...")
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", message=".*_ARRAY_API.*")
                 warnings.filterwarnings("ignore", message=".*Failed to initialize NumPy.*")
@@ -122,14 +126,21 @@ class FasterWhisperEngine(ASREngine):
                         "3. 已安装支持 GPU 的 PyTorch 版本"
                     )
                 
+                logger.info(f"✅ CUDA 可用：{torch.cuda.get_device_name(0)}")
+                logger.info("📥 正在加载 faster-whisper 模型...")
                 from faster_whisper import WhisperModel
 
             model_path = model_path or self.model_name
+            logger.info(f"模型名称：{model_path}")
+            logger.info(f"设备：{self.device}")
+            logger.info(f"计算精度：{self.compute_type}")
+            
             self.model = WhisperModel(
                 model_path,
                 device=self.device,
                 compute_type=self.compute_type,
             )
+            logger.info("✅ 模型加载成功")
         except ImportError:
             raise ImportError(
                 "faster-whisper is not installed. Please install it with: pip install faster-whisper"
@@ -186,8 +197,14 @@ class FasterWhisperEngine(ASREngine):
             self.load_model(model_path)
 
         lang = None if language == "auto" else language
+        
+        logger.info(f"🎙️ 开始语音识别...")
+        logger.info(f"音频文件：{Path(audio_path).name}")
+        logger.info(f"语言设置：{language}")
+        if self.vad_filter:
+            logger.info("VAD 过滤：已启用")
 
-        segments, _ = self.model.transcribe(
+        segments, info = self.model.transcribe(
             audio_path,
             language=lang,
             vad_filter=self.vad_filter,
@@ -201,8 +218,11 @@ class FasterWhisperEngine(ASREngine):
             condition_on_previous_text=self.condition_on_previous_text,
             prompt_reset_on_temperature=self.prompt_reset_on_temperature,
         )
+        
+        logger.info(f"📊 检测到的语言：{info.language} (概率：{info.language_probability:.2%})")
 
         subtitle = Subtitle(title="Video Subtitle")
+        segment_count = 0
         for segment in segments:
             start_ms = int(segment.start * 1000)
             end_ms = int(segment.end * 1000)
@@ -212,6 +232,9 @@ class FasterWhisperEngine(ASREngine):
                 end_ms=end_ms,
                 text=text,
             )
+            segment_count += 1
+        
+        logger.info(f"✅ 语音识别完成，共 {segment_count} 个片段")
 
         return subtitle
 
@@ -220,5 +243,7 @@ class FasterWhisperEngine(ASREngine):
         if self.model is None:
             self.load_model()
 
+        logger.info(f"🔍 正在进行语言检测...")
         _, info = self.model.transcribe(audio_path, language="auto")
+        logger.info(f"✅ 检测到语言：{info.language} (概率：{info.language_probability:.2%})")
         return info.language

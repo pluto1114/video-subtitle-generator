@@ -2,6 +2,7 @@
 
 import logging
 import threading
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk, filedialog, messagebox
@@ -24,9 +25,23 @@ from .config import (
 from .processor import VideoProcessor
 from .config_manager import ConfigManager
 
+# 自定义日志处理器，用于将日志发送到 GUI
+class GUILogHandler(logging.Handler):
+    """Custom logging handler that sends logs to GUI."""
+    
+    def __init__(self, gui_instance):
+        super().__init__(level=logging.INFO)
+        self.gui = gui_instance
+    
+    def emit(self, record):
+        """Emit a log record."""
+        msg = self.format(record)
+        if hasattr(self.gui, '_log_message'):
+            self.gui.after(0, lambda: self.gui._log_message(msg))
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format="%(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -45,6 +60,11 @@ class VideoSubtitleGUI(ctk.CTk):
         self.video_files: list[str] = []
         self.processor: Optional[VideoProcessor] = None
         self.is_processing = False
+        
+        # 计时相关
+        self._start_time: Optional[float] = None
+        self._step_times: dict[str, tuple[float, float]] = {}  # step_name -> (start_time, end_time)
+        self._current_step: Optional[str] = None
 
         self._load_last_config()
         self._create_ui()
@@ -72,6 +92,10 @@ class VideoSubtitleGUI(ctk.CTk):
         self._create_config_panel(main_frame, 1, 0)
         self._create_control_panel(main_frame, 0, 1)
         self._create_output_panel(main_frame, 1, 1)
+        
+        # 添加 GUI 日志处理器
+        gui_handler = GUILogHandler(self)
+        logging.getLogger().addHandler(gui_handler)
 
     def _create_file_panel(
         self, parent: ctk.CTkFrame, row: int, column: int
@@ -333,6 +357,15 @@ class VideoSubtitleGUI(ctk.CTk):
             control_frame, text="就绪", font=ctk.CTkFont(size=14)
         )
         self.progress_label.grid(row=3, column=0, padx=10, pady=5)
+        
+        # 总用时显示
+        self.total_time_label = ctk.CTkLabel(
+            control_frame, 
+            text="总用时：0.0s", 
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#2196F3"
+        )
+        self.total_time_label.grid(row=4, column=0, padx=10, pady=5)
 
     def _create_output_panel(
         self, parent: ctk.CTkFrame, row: int, column: int
@@ -340,16 +373,28 @@ class VideoSubtitleGUI(ctk.CTk):
         """Create output panel."""
         output_frame = ctk.CTkFrame(parent)
         output_frame.grid(row=row, column=column, sticky="nsew", padx=5, pady=5)
-        output_frame.grid_rowconfigure(1, weight=1)
+        output_frame.grid_rowconfigure(2, weight=1)
         output_frame.grid_columnconfigure(0, weight=1)
 
         title_label = ctk.CTkLabel(
-            output_frame, text="处理结果", font=ctk.CTkFont(size=16, weight="bold")
+            output_frame, text="处理过程", font=ctk.CTkFont(size=16, weight="bold")
         )
         title_label.grid(row=0, column=0, sticky="w", padx=10, pady=5)
 
-        self.result_text = ctk.CTkTextbox(output_frame, state="disabled")
-        self.result_text.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+        # 执行过程日志
+        self.process_log_text = ctk.CTkTextbox(output_frame, state="normal", height=300)
+        self.process_log_text.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+        
+        # 步骤用时统计
+        steps_title = ctk.CTkLabel(
+            output_frame, 
+            text="步骤用时统计", 
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        steps_title.grid(row=2, column=0, sticky="w", padx=10, pady=(10, 5))
+        
+        self.steps_text = ctk.CTkTextbox(output_frame, state="normal", height=150)
+        self.steps_text.grid(row=3, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
     def _add_files(self) -> None:
         """Add video files to the list."""
@@ -421,6 +466,10 @@ class VideoSubtitleGUI(ctk.CTk):
         self.is_processing = True
         self.start_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
+        
+        # 重置计时和日志
+        self._reset_timing()
+        self._start_time = time.time()
 
         config = self._create_config_from_ui()
         self.processor = VideoProcessor(config)
@@ -432,8 +481,10 @@ class VideoSubtitleGUI(ctk.CTk):
             )
             self.after(
                 0,
-                lambda: self.progress_label.configure(text=stage),
+                lambda: self.progress_label.configure(text=f"{progress:5.1f}% - {stage}"),
             )
+            # 记录步骤信息并更新显示
+            self.after(0, lambda: self._record_step(stage, progress))
 
         self.processor.set_progress_callback(progress_callback)
 
@@ -496,16 +547,105 @@ class VideoSubtitleGUI(ctk.CTk):
         self.stop_btn.configure(state="disabled")
         self.progress_bar.set(1)
         self.progress_label.configure(text="处理完成")
+        
+        # 更新最终时间
+        if self._start_time:
+            total_time = time.time() - self._start_time
+            self.total_time_label.configure(text=f"总用时：{total_time:.1f}s")
+            self._log_message(f"✅ 处理完成，总用时：{total_time:.1f}s")
+            self._update_steps_display()
 
         config = self._create_config_from_ui()
         self.config_manager.save_config(config)
 
     def _log_message(self, message: str) -> None:
         """Log message to output panel."""
-        self.result_text.configure(state="normal")
-        self.result_text.insert("end", message + "\n")
-        self.result_text.configure(state="disabled")
-        self.result_text.see("end")
+        self.process_log_text.configure(state="normal")
+        timestamp = time.strftime("%H:%M:%S")
+        self.process_log_text.insert("end", f"[{timestamp}] {message}\n")
+        self.process_log_text.configure(state="disabled")
+        self.process_log_text.see("end")
+    
+    def _record_step(self, stage: str, progress: float) -> None:
+        """Record step timing information from progress callback."""
+        current_time = time.time()
+        
+        # 从阶段文本中提取步骤名称（去除时间信息）
+        step_name = stage.split('|')[0].strip()
+        
+        # 如果开始新步骤，记录开始时间
+        if step_name != self._current_step:
+            # 结束上一个步骤
+            if self._current_step and self._current_step in self._step_times:
+                start_time, _ = self._step_times[self._current_step]
+                self._step_times[self._current_step] = (start_time, current_time)
+            
+            # 开始新步骤
+            self._current_step = step_name
+            self._step_times[step_name] = (current_time, None)
+        
+        # 更新显示
+        self._update_steps_display()
+    
+    def _log_process_step(self, step_name: str, message: str) -> None:
+        """Log a process step with timing."""
+        current_time = time.time()
+        
+        # 如果开始新步骤，记录开始时间
+        if step_name != self._current_step:
+            # 结束上一个步骤
+            if self._current_step and self._current_step in self._step_times:
+                start_time, _ = self._step_times[self._current_step]
+                self._step_times[self._current_step] = (start_time, current_time)
+            
+            # 开始新步骤
+            self._current_step = step_name
+            self._step_times[step_name] = (current_time, None)
+        
+        self._log_message(f"{step_name}: {message}")
+    
+    def _update_steps_display(self) -> None:
+        """Update the steps timing display."""
+        self.steps_text.configure(state="normal")
+        self.steps_text.delete("1.0", "end")
+        
+        total_time = 0.0
+        for step_name, (start_time, end_time) in self._step_times.items():
+            if end_time is not None:
+                duration = end_time - start_time
+                total_time += duration
+                bar_length = min(30, int(duration))
+                bar = "█" * bar_length + "░" * (30 - bar_length)
+                self.steps_text.insert("end", f"{bar} {step_name}: {duration:.1f}s\n")
+        
+        if self._current_step and self._current_step in self._step_times:
+            start_time, _ = self._step_times[self._current_step]
+            current_duration = time.time() - start_time
+            total_time += current_duration
+            bar_length = min(30, int(current_duration))
+            bar = "█" * bar_length + "░" * (30 - bar_length)
+            self.steps_text.insert("end", f"{bar} {self._current_step}: {current_duration:.1f}s (进行中)\n")
+        
+        if total_time > 0:
+            self.steps_text.insert("end", "\n" + "="*50 + "\n")
+            self.steps_text.insert("end", f"总用时：{total_time:.1f}s\n")
+            self.total_time_label.configure(text=f"总用时：{total_time:.1f}s")
+        
+        self.steps_text.configure(state="disabled")
+        self.steps_text.see("end")
+    
+    def _reset_timing(self) -> None:
+        """Reset timing information."""
+        self._start_time = None
+        self._step_times.clear()
+        self._current_step = None
+        self.total_time_label.configure(text="总用时：0.0s")
+        self.process_log_text.configure(state="normal")
+        self.process_log_text.delete("1.0", "end")
+        self.process_log_text.configure(state="disabled")
+        self.steps_text.configure(state="normal")
+        self.steps_text.delete("1.0", "end")
+        self.steps_text.configure(state="disabled")
 
 
 def main() -> None:
