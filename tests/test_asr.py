@@ -71,7 +71,7 @@ class TestFasterWhisperEngine:
         """Test default engine configuration."""
         engine = FasterWhisperEngine()
         assert engine.model_name == "large-v3-turbo"
-        assert engine.device == "cuda"
+        assert engine.device == "auto"
         assert engine.compute_type == "float16"
 
     @pytest.mark.skip(reason="Requires actual model download")

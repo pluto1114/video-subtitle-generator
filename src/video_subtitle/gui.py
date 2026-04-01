@@ -300,6 +300,18 @@ class VideoSubtitleGUI(ctk.CTk):
         vad_check.grid(row=start_row, column=0, columnspan=2, sticky="w", padx=10, pady=5)
         start_row += 1
 
+        device_label = ctk.CTkLabel(parent, text="设备选择:")
+        device_label.grid(row=start_row, column=0, sticky="w", pady=2)
+        self.device_var = ctk.StringVar(value=self.config.model_config.device)
+        device_combo = ctk.CTkComboBox(
+            parent,
+            variable=self.device_var,
+            values=["auto", "cuda", "cpu"],
+            width=300,
+        )
+        device_combo.grid(row=start_row, column=1, padx=10, pady=2)
+        start_row += 1
+
         self.overwrite_var = ctk.BooleanVar(value=self.config.overwrite)
         overwrite_check = ctk.CTkCheckBox(
             parent, text="覆盖已存在文件", variable=self.overwrite_var
@@ -444,6 +456,7 @@ class VideoSubtitleGUI(ctk.CTk):
         config = Config()
         config.model_config.model_name = self.model_var.get()
         config.model_config.language = self.lang_var.get()
+        config.model_config.device = self.device_var.get()
         config.subtitle_format = SubtitleFormat(self.format_var.get())
         config.output_dir = self.output_var.get() or None
         config.quality_mode = QualityMode(self.quality_var.get())

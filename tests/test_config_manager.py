@@ -77,7 +77,7 @@ class TestConfigManager:
             manager = ConfigManager(config_dir=tmpdir)
             config = manager.load_config()
 
-            assert config.quality_mode == QualityMode.BALANCED
+            assert config.quality_mode == QualityMode.PRO
             assert config.subtitle_format == SubtitleFormat.SRT
 
     def test_config_exists(self):

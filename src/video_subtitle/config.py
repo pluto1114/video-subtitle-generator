@@ -57,7 +57,7 @@ class ModelConfig:
 
     model_name: str = "large-v3-turbo"
     local_model_path: Optional[str] = None
-    device: str = "cuda"
+    device: str = "auto"
     compute_type: str = "float16"
     language: str = "auto"
 

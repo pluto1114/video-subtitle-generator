@@ -73,7 +73,7 @@ class FasterWhisperEngine(ASREngine):
     def __init__(
         self,
         model_name: str = "large-v3-turbo",
-        device: str = "cuda",
+        device: str = "auto",
         compute_type: str = "float16",
         vad_filter: bool = True,
         vad_parameters: Optional[dict] = None,
@@ -100,9 +100,7 @@ class FasterWhisperEngine(ASREngine):
         self.condition_on_previous_text = condition_on_previous_text
         self.prompt_reset_on_temperature = prompt_reset_on_temperature
         self.model = None
-        
-        if device != "cuda":
-            raise ValueError("本应用仅支持 GPU 加速，请确保设备设置为 'cuda'")
+        self._actual_device = None
 
     def load_model(self, model_path: Optional[str] = None) -> None:
         """Load the faster-whisper model."""
@@ -110,7 +108,7 @@ class FasterWhisperEngine(ASREngine):
             import warnings
             import sys
             
-            logger.info("🔍 正在检查 CUDA 环境...")
+            logger.info("🔍 正在检查硬件环境...")
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", message=".*_ARRAY_API.*")
                 warnings.filterwarnings("ignore", message=".*Failed to initialize NumPy.*")
@@ -118,26 +116,49 @@ class FasterWhisperEngine(ASREngine):
                 import numpy as np
                 import torch
                 
-                if not torch.cuda.is_available():
-                    raise RuntimeError(
-                        "GPU 不可用。本应用仅支持 GPU 加速，请确保:\n"
-                        "1. 已安装 NVIDIA 显卡\n"
-                        "2. 已安装正确的 CUDA 驱动\n"
-                        "3. 已安装支持 GPU 的 PyTorch 版本"
-                    )
+                cuda_available = torch.cuda.is_available()
                 
-                logger.info(f"✅ CUDA 可用：{torch.cuda.get_device_name(0)}")
+                if self.device == "auto":
+                    if cuda_available:
+                        self._actual_device = "cuda"
+                        logger.info(f"✅ 检测到 GPU: {torch.cuda.get_device_name(0)}")
+                        logger.info("🚀 将使用 GPU 加速")
+                    else:
+                        self._actual_device = "cpu"
+                        logger.info("⚠️  未检测到 GPU")
+                        logger.info("💻 将降级使用 CPU 运行（速度较慢）")
+                        self.compute_type = "int8"
+                        logger.info(f"📊 计算精度已自动调整为：{self.compute_type}")
+                elif self.device == "cuda":
+                    if not cuda_available:
+                        logger.warning("⚠️  用户指定使用 GPU，但 GPU 不可用")
+                        logger.warning("💻 降级使用 CPU 运行（速度较慢）")
+                        self._actual_device = "cpu"
+                        self.compute_type = "int8"
+                        logger.info(f"📊 计算精度已自动调整为：{self.compute_type}")
+                    else:
+                        self._actual_device = "cuda"
+                        logger.info(f"✅ GPU 可用：{torch.cuda.get_device_name(0)}")
+                elif self.device == "cpu":
+                    self._actual_device = "cpu"
+                    if cuda_available:
+                        logger.info("ℹ️  用户指定使用 CPU，尽管 GPU 可用")
+                    else:
+                        logger.info("💻 使用 CPU 运行")
+                else:
+                    self._actual_device = self.device
+                
                 logger.info("📥 正在加载 faster-whisper 模型...")
                 from faster_whisper import WhisperModel
 
             model_path = model_path or self.model_name
             logger.info(f"模型名称：{model_path}")
-            logger.info(f"设备：{self.device}")
+            logger.info(f"设备：{self._actual_device}")
             logger.info(f"计算精度：{self.compute_type}")
             
             self.model = WhisperModel(
                 model_path,
-                device=self.device,
+                device=self._actual_device,
                 compute_type=self.compute_type,
             )
             logger.info("✅ 模型加载成功")

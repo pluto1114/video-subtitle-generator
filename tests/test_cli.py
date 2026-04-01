@@ -97,7 +97,7 @@ class TestCreateConfigFromArgs:
         args = parse_args(["video.mp4"])
         config = create_config_from_args(args)
 
-        assert config.quality_mode == QualityMode.BALANCED
+        assert config.quality_mode == QualityMode.PRO
         assert config.subtitle_format == SubtitleFormat.SRT
 
     def test_custom_config(self):

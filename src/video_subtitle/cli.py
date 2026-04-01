@@ -117,8 +117,8 @@ def parse_args(args: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--device",
         dest="device",
-        default="cuda",
-        help="Device to use for inference (default: cuda)",
+        default="auto",
+        help="Device to use for inference (default: auto, will use GPU if available, otherwise CPU)",
     )
 
     parser.add_argument(

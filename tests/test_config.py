@@ -85,7 +85,7 @@ class TestModelConfig:
         """Test default model configuration."""
         config = ModelConfig()
         assert config.model_name == "large-v3-turbo"
-        assert config.device == "cuda"
+        assert config.device == "auto"
         assert config.compute_type == "float16"
         assert config.language == "auto"
         assert config.local_model_path is not None
@@ -116,12 +116,12 @@ class TestConfig:
     def test_default_config(self):
         """Test default configuration."""
         config = Config()
-        assert config.quality_mode == QualityMode.BALANCED
+        assert config.quality_mode == QualityMode.PRO
         assert config.audio_enhance_profile == AudioEnhanceProfile.OFF
-        assert config.vad_profile == VADProfile.BALANCED
+        assert config.vad_profile == VADProfile.SENSITIVE
         assert config.subtitle_format == SubtitleFormat.SRT
         assert config.overwrite is False
-        assert config.use_vad is True
+        assert config.use_vad is False
 
     def test_apply_quality_mode_pro(self):
         """Test applying PRO quality mode."""
@@ -130,7 +130,7 @@ class TestConfig:
 
         assert config.quality_mode == QualityMode.PRO
         assert config.vad_profile == VADProfile.SENSITIVE
-        assert config.audio_enhance_profile == AudioEnhanceProfile.STRONG
+        assert config.audio_enhance_profile == AudioEnhanceProfile.OFF
         assert config.vad_config.vad_min_speech_ms == 30
         assert config.vad_config.vad_max_speech_s == 60.0
 
@@ -175,10 +175,10 @@ class TestConfig:
         config = Config.voice_priority_template()
 
         assert config.quality_mode == QualityMode.PRO
-        assert config.audio_enhance_profile == AudioEnhanceProfile.STRONG
+        assert config.audio_enhance_profile == AudioEnhanceProfile.OFF
         assert config.vad_profile == VADProfile.SENSITIVE
-        assert config.vad_config.vad_min_speech_ms == 30
-        assert config.vad_config.voice_enhance_threshold == 0.15
+        assert config.vad_config.vad_min_speech_ms == 50
+        assert config.vad_config.voice_enhance_threshold == 0.3
 
     def test_custom_config(self):
         """Test custom configuration."""
