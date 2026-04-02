@@ -24,8 +24,14 @@ from .config import (
 )
 from .processor import VideoProcessor
 from .config_manager import ConfigManager
+from .i18n import (
+    _,
+    get_i18n_manager,
+    init_i18n,
+    Language,
+    LANGUAGE_NAMES,
+)
 
-# 自定义日志处理器，用于将日志发送到 GUI
 class GUILogHandler(logging.Handler):
     """Custom logging handler that sends logs to GUI."""
     
@@ -52,14 +58,60 @@ class VideoSubtitleGUI(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("视频字幕生成器 - Video Subtitle Generator")
+        self.config = Config()
+        self.config_manager = ConfigManager()
+        self.video_files: list[str] = []
+        self.processor: Optional[VideoProcessor] = None
+        self.is_processing = False
+        
+        self._start_time: Optional[float] = None
+        self._step_times: dict[str, tuple[float, float]] = {}
+        self._current_step: Optional[str] = None
+
+        self._initialize_i18n()
+        self._load_last_config()
+        self._setup_ui()
+
+    def _initialize_i18n(self) -> None:
+        """Initialize internationalization system."""
+        init_i18n()
+        self.i18n_manager = get_i18n_manager()
+        self.i18n_manager.register_callback(self._on_language_changed)
+
+    def _load_last_config(self) -> None:
+        """Load last used configuration."""
+        if self.config_manager.config_exists():
+            try:
+                self.config = self.config_manager.load_config()
+                if self.config.language:
+                    try:
+                        lang = Language(self.config.language)
+                        self.i18n_manager.set_language(lang)
+                    except ValueError:
+                        pass
+                logger.info(_("loaded_last_config"))
+            except Exception as e:
+                logger.warning(_("failed_load_config", error=e))
+
+    def _setup_ui(self) -> None:
+        """Setup the entire user interface."""
+        self._apply_translate_window()
+        self._setup_colors()
+        self._create_ui()
+        
+        gui_handler = GUILogHandler(self)
+        logging.getLogger().addHandler(gui_handler)
+
+    def _apply_translate_window(self) -> None:
+        """Apply translation to window properties."""
+        self.title(_("app_title"))
         self.geometry("1300x850")
         
-        # 设置主题和配色
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
-        
-        # 配色方案 - 更加专业协调
+
+    def _setup_colors(self) -> None:
+        """Setup color scheme."""
         self.COLORS = {
             "primary": "#6366F1",
             "primary_hover": "#4F46E5",
@@ -79,29 +131,6 @@ class VideoSubtitleGUI(ctk.CTk):
             "text_dim": "#94A3B8",
         }
 
-        self.config = Config()
-        self.config_manager = ConfigManager()
-        self.video_files: list[str] = []
-        self.processor: Optional[VideoProcessor] = None
-        self.is_processing = False
-        
-        # 计时相关
-        self._start_time: Optional[float] = None
-        self._step_times: dict[str, tuple[float, float]] = {}  # step_name -> (start_time, end_time)
-        self._current_step: Optional[str] = None
-
-        self._load_last_config()
-        self._create_ui()
-
-    def _load_last_config(self) -> None:
-        """Load last used configuration."""
-        if self.config_manager.config_exists():
-            try:
-                self.config = self.config_manager.load_config()
-                logger.info("Loaded last configuration")
-            except Exception as e:
-                logger.warning(f"Failed to load config: {e}")
-
     def _create_ui(self) -> None:
         """Create the user interface."""
         self.grid_columnconfigure(0, weight=1)
@@ -114,14 +143,57 @@ class VideoSubtitleGUI(ctk.CTk):
         main_frame.grid_rowconfigure(0, weight=1)
         main_frame.grid_rowconfigure(1, weight=1)
 
-        self._create_file_panel(main_frame, 0, 0)
-        self._create_config_panel(main_frame, 1, 0)
-        self._create_control_panel(main_frame, 0, 1)
-        self._create_output_panel(main_frame, 1, 1)
-        
-        # 添加 GUI 日志处理器
-        gui_handler = GUILogHandler(self)
-        logging.getLogger().addHandler(gui_handler)
+        self._create_top_bar(main_frame)
+        self._create_file_panel(main_frame, 1, 0)
+        self._create_control_panel(main_frame, 1, 1)
+        self._create_config_panel(main_frame, 2, 0)
+        self._create_output_panel(main_frame, 2, 1)
+
+    def _create_top_bar(self, parent: ctk.CTkFrame) -> None:
+        """Create top bar with language selector."""
+        top_bar = ctk.CTkFrame(parent, fg_color="transparent", corner_radius=0)
+        top_bar.grid(row=0, column=0, columnspan=2, sticky="ew", padx=8, pady=0)
+        top_bar.grid_columnconfigure(0, weight=1)
+
+        lang_label = ctk.CTkLabel(
+            top_bar,
+            text=_("language_selection"),
+            text_color=self.COLORS["text_dim"],
+        )
+        lang_label.grid(row=0, column=0, sticky="e", padx=12, pady=8)
+
+        self.language_var = ctk.StringVar(value=LANGUAGE_NAMES[self.i18n_manager.get_language()])
+        lang_combo = ctk.CTkComboBox(
+            top_bar,
+            variable=self.language_var,
+            values=list(LANGUAGE_NAMES.values()),
+            width=180,
+            corner_radius=8,
+            command=self._on_language_selected,
+        )
+        lang_combo.grid(row=0, column=1, sticky="e", padx=12, pady=8)
+
+    def _on_language_selected(self, _) -> None:
+        """Handle language selection change."""
+        selected_name = self.language_var.get()
+        for lang, name in LANGUAGE_NAMES.items():
+            if name == selected_name:
+                self.i18n_manager.set_language(lang)
+                self.config.language = lang.value
+                self.config_manager.save_config(self.config)
+                break
+
+    def _on_language_changed(self) -> None:
+        """Update all UI elements when language changes."""
+        self.title(_("app_title"))
+        self.language_var.set(LANGUAGE_NAMES[self.i18n_manager.get_language()])
+        self._recreate_ui()
+
+    def _recreate_ui(self) -> None:
+        """Recreate the entire UI with new language."""
+        for widget in self.winfo_children():
+            widget.destroy()
+        self._create_ui()
 
     def _create_file_panel(
         self, parent: ctk.CTkFrame, row: int, column: int
@@ -134,13 +206,12 @@ class VideoSubtitleGUI(ctk.CTk):
 
         title_label = ctk.CTkLabel(
             file_frame, 
-            text="📁 视频文件列表", 
+            text=_("file_panel_title"), 
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color=self.COLORS["text"]
         )
         title_label.grid(row=0, column=0, sticky="w", padx=15, pady=(12, 8))
 
-        # 使用自定义样式的Listbox
         self.file_listbox = tk.Listbox(
             file_frame,
             selectmode=tk.EXTENDED,
@@ -169,7 +240,7 @@ class VideoSubtitleGUI(ctk.CTk):
 
         add_btn = ctk.CTkButton(
             btn_frame, 
-            text="➕ 添加文件", 
+            text=_("add_files"), 
             command=self._add_files, 
             height=36,
             font=ctk.CTkFont(size=13, weight="bold"),
@@ -182,7 +253,7 @@ class VideoSubtitleGUI(ctk.CTk):
 
         remove_btn = ctk.CTkButton(
             btn_frame, 
-            text="🗑️ 移除选中", 
+            text=_("remove_selected"), 
             command=self._remove_selected, 
             height=36,
             font=ctk.CTkFont(size=13),
@@ -196,7 +267,7 @@ class VideoSubtitleGUI(ctk.CTk):
 
         clear_btn = ctk.CTkButton(
             btn_frame, 
-            text="🆑 清空列表", 
+            text=_("clear_list"), 
             command=self._clear_files, 
             height=36,
             font=ctk.CTkFont(size=13),
@@ -227,14 +298,13 @@ class VideoSubtitleGUI(ctk.CTk):
 
         title_label = ctk.CTkLabel(
             scrollable_frame,
-            text="⚙️ 参数配置",
+            text=_("config_panel_title"),
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color=self.COLORS["text"]
         )
         title_label.grid(row=0, column=0, sticky="w", pady=(0, 15))
 
         row_idx = 1
-
         row_idx = self._create_basic_config_section(scrollable_frame, row_idx)
         row_idx = self._create_advanced_config_section(scrollable_frame, row_idx)
 
@@ -244,14 +314,14 @@ class VideoSubtitleGUI(ctk.CTk):
         """Create basic configuration section."""
         basic_label = ctk.CTkLabel(
             parent, 
-            text="📋 基础参数", 
+            text=_("basic_config"), 
             font=ctk.CTkFont(weight="bold", size=15),
             text_color=self.COLORS["primary"]
         )
         basic_label.grid(row=start_row, column=0, sticky="w", pady=(10, 8), columnspan=3)
         start_row += 1
 
-        model_label = ctk.CTkLabel(parent, text="模型:", text_color=self.COLORS["text_dim"])
+        model_label = ctk.CTkLabel(parent, text=_("model"), text_color=self.COLORS["text_dim"])
         model_label.grid(row=start_row, column=0, sticky="w", pady=6)
         self.model_var = ctk.StringVar(value=self.config.model_config.model_name)
         model_combo = ctk.CTkComboBox(
@@ -271,7 +341,7 @@ class VideoSubtitleGUI(ctk.CTk):
         model_combo.grid(row=start_row, column=1, padx=12, pady=6, columnspan=2)
         start_row += 1
 
-        lang_label = ctk.CTkLabel(parent, text="语言:", text_color=self.COLORS["text_dim"])
+        lang_label = ctk.CTkLabel(parent, text=_("language"), text_color=self.COLORS["text_dim"])
         lang_label.grid(row=start_row, column=0, sticky="w", pady=6)
         self.lang_var = ctk.StringVar(value=self.config.model_config.language)
         lang_combo = ctk.CTkComboBox(
@@ -295,7 +365,7 @@ class VideoSubtitleGUI(ctk.CTk):
         lang_combo.grid(row=start_row, column=1, padx=12, pady=6, columnspan=2)
         start_row += 1
 
-        format_label = ctk.CTkLabel(parent, text="字幕格式:", text_color=self.COLORS["text_dim"])
+        format_label = ctk.CTkLabel(parent, text=_("subtitle_format"), text_color=self.COLORS["text_dim"])
         format_label.grid(row=start_row, column=0, sticky="w", pady=6)
         self.format_var = ctk.StringVar(value=self.config.subtitle_format.value)
         format_combo = ctk.CTkComboBox(
@@ -308,7 +378,7 @@ class VideoSubtitleGUI(ctk.CTk):
         format_combo.grid(row=start_row, column=1, padx=12, pady=6, columnspan=2)
         start_row += 1
 
-        output_label = ctk.CTkLabel(parent, text="输出目录:", text_color=self.COLORS["text_dim"])
+        output_label = ctk.CTkLabel(parent, text=_("output_dir"), text_color=self.COLORS["text_dim"])
         output_label.grid(row=start_row, column=0, sticky="w", pady=6)
         self.output_var = ctk.StringVar(value=self.config.output_dir or "")
         output_entry = ctk.CTkEntry(
@@ -320,7 +390,7 @@ class VideoSubtitleGUI(ctk.CTk):
         output_entry.grid(row=start_row, column=1, padx=12, pady=6)
         output_btn = ctk.CTkButton(
             parent, 
-            text="浏览", 
+            text=_("browse"), 
             command=self._browse_output, 
             width=80,
             height=32,
@@ -341,14 +411,14 @@ class VideoSubtitleGUI(ctk.CTk):
         """Create advanced configuration section."""
         advanced_label = ctk.CTkLabel(
             parent, 
-            text="🔧 高级参数", 
+            text=_("advanced_config"), 
             font=ctk.CTkFont(weight="bold", size=15),
             text_color=self.COLORS["primary"]
         )
         advanced_label.grid(row=start_row, column=0, sticky="w", pady=(15, 8), columnspan=3)
         start_row += 1
 
-        quality_label = ctk.CTkLabel(parent, text="质量模式:", text_color=self.COLORS["text_dim"])
+        quality_label = ctk.CTkLabel(parent, text=_("quality_mode"), text_color=self.COLORS["text_dim"])
         quality_label.grid(row=start_row, column=0, sticky="w", pady=6)
         self.quality_var = ctk.StringVar(value=self.config.quality_mode.value)
         quality_combo = ctk.CTkComboBox(
@@ -361,7 +431,7 @@ class VideoSubtitleGUI(ctk.CTk):
         quality_combo.grid(row=start_row, column=1, padx=12, pady=6, columnspan=2)
         start_row += 1
 
-        enhance_label = ctk.CTkLabel(parent, text="音频增强:", text_color=self.COLORS["text_dim"])
+        enhance_label = ctk.CTkLabel(parent, text=_("audio_enhance"), text_color=self.COLORS["text_dim"])
         enhance_label.grid(row=start_row, column=0, sticky="w", pady=6)
         self.enhance_var = ctk.StringVar(
             value=self.config.audio_enhance_profile.value
@@ -376,7 +446,7 @@ class VideoSubtitleGUI(ctk.CTk):
         enhance_combo.grid(row=start_row, column=1, padx=12, pady=6, columnspan=2)
         start_row += 1
 
-        vad_label = ctk.CTkLabel(parent, text="VAD 配置:", text_color=self.COLORS["text_dim"])
+        vad_label = ctk.CTkLabel(parent, text=_("vad_config"), text_color=self.COLORS["text_dim"])
         vad_label.grid(row=start_row, column=0, sticky="w", pady=6)
         self.vad_var = ctk.StringVar(value=self.config.vad_profile.value)
         vad_combo = ctk.CTkComboBox(
@@ -392,7 +462,7 @@ class VideoSubtitleGUI(ctk.CTk):
         self.vad_enabled_var = ctk.BooleanVar(value=self.config.use_vad)
         vad_check = ctk.CTkCheckBox(
             parent, 
-            text="启用 VAD", 
+            text=_("enable_vad"), 
             variable=self.vad_enabled_var,
             text_color=self.COLORS["text"],
             checkbox_width=22,
@@ -402,7 +472,7 @@ class VideoSubtitleGUI(ctk.CTk):
         vad_check.grid(row=start_row, column=0, columnspan=3, sticky="w", padx=0, pady=8)
         start_row += 1
 
-        device_label = ctk.CTkLabel(parent, text="设备选择:", text_color=self.COLORS["text_dim"])
+        device_label = ctk.CTkLabel(parent, text=_("device_selection"), text_color=self.COLORS["text_dim"])
         device_label.grid(row=start_row, column=0, sticky="w", pady=6)
         self.device_var = ctk.StringVar(value=self.config.model_config.device)
         device_combo = ctk.CTkComboBox(
@@ -418,7 +488,7 @@ class VideoSubtitleGUI(ctk.CTk):
         self.overwrite_var = ctk.BooleanVar(value=self.config.overwrite)
         overwrite_check = ctk.CTkCheckBox(
             parent, 
-            text="覆盖已存在文件", 
+            text=_("overwrite_existing"), 
             variable=self.overwrite_var,
             text_color=self.COLORS["text"],
             checkbox_width=22,
@@ -432,7 +502,7 @@ class VideoSubtitleGUI(ctk.CTk):
 
         voice_priority_btn = ctk.CTkButton(
             parent,
-            text="🎤 人声优先模板",
+            text=_("voice_priority_template"),
             command=self._apply_voice_priority,
             width=200,
             height=36,
@@ -460,7 +530,7 @@ class VideoSubtitleGUI(ctk.CTk):
 
         title_label = ctk.CTkLabel(
             control_frame,
-            text="🎮 控制面板",
+            text=_("control_panel_title"),
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color=self.COLORS["text"]
         )
@@ -468,7 +538,7 @@ class VideoSubtitleGUI(ctk.CTk):
 
         self.start_btn = ctk.CTkButton(
             control_frame,
-            text="▶️ 开始处理",
+            text=_("start_processing"),
             command=self._start_processing,
             height=52,
             font=ctk.CTkFont(size=18, weight="bold"),
@@ -481,7 +551,7 @@ class VideoSubtitleGUI(ctk.CTk):
 
         self.stop_btn = ctk.CTkButton(
             control_frame,
-            text="⏹️ 停止",
+            text=_("stop"),
             command=self._stop_processing,
             height=52,
             font=ctk.CTkFont(size=18, weight="bold"),
@@ -493,7 +563,6 @@ class VideoSubtitleGUI(ctk.CTk):
         )
         self.stop_btn.grid(row=2, column=0, padx=15, pady=(0, 12), sticky="ew")
 
-        # 进度条区域
         progress_container = ctk.CTkFrame(control_frame, fg_color="transparent")
         progress_container.grid(row=3, column=0, sticky="ew", padx=15, pady=10)
         progress_container.grid_columnconfigure(0, weight=1)
@@ -504,16 +573,15 @@ class VideoSubtitleGUI(ctk.CTk):
 
         self.progress_label = ctk.CTkLabel(
             progress_container, 
-            text="就绪", 
+            text=_("ready"), 
             font=ctk.CTkFont(size=14),
             text_color=self.COLORS["text_dim"]
         )
         self.progress_label.grid(row=1, column=0, sticky="w")
         
-        # 总用时显示
         self.total_time_label = ctk.CTkLabel(
             progress_container, 
-            text="⏱️ 总用时：0.0s", 
+            text=_("total_time", time="0.0"), 
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=self.COLORS["primary"]
         )
@@ -531,13 +599,12 @@ class VideoSubtitleGUI(ctk.CTk):
 
         title_label = ctk.CTkLabel(
             output_frame, 
-            text="📝 处理过程", 
+            text=_("output_panel_title"), 
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color=self.COLORS["text"]
         )
         title_label.grid(row=0, column=0, sticky="w", padx=15, pady=(12, 8))
 
-        # 执行过程日志
         self.process_log_text = ctk.CTkTextbox(
             output_frame, 
             state="normal", 
@@ -549,10 +616,9 @@ class VideoSubtitleGUI(ctk.CTk):
         )
         self.process_log_text.grid(row=1, column=0, sticky="nsew", padx=15, pady=(0, 10))
         
-        # 步骤用时统计
         steps_title = ctk.CTkLabel(
             output_frame, 
-            text="⏱️ 步骤用时统计", 
+            text=_("steps_timing"), 
             font=ctk.CTkFont(size=15, weight="bold"),
             text_color=self.COLORS["text"]
         )
@@ -572,11 +638,11 @@ class VideoSubtitleGUI(ctk.CTk):
     def _add_files(self) -> None:
         """Add video files to the list."""
         filetypes = [
-            ("视频文件", "*.mp4 *.mkv *.avi *.mov *.wmv *.flv *.webm"),
-            ("所有文件", "*.*"),
+            (_("video_files"), "*.mp4 *.mkv *.avi *.mov *.wmv *.flv *.webm"),
+            (_("all_files"), "*.*"),
         ]
         files = filedialog.askopenfilenames(
-            title="选择视频文件",
+            title=_("select_video_files"),
             filetypes=filetypes,
         )
 
@@ -599,18 +665,17 @@ class VideoSubtitleGUI(ctk.CTk):
 
     def _browse_output(self) -> None:
         """Browse for output directory."""
-        directory = filedialog.askdirectory(title="选择输出目录")
+        directory = filedialog.askdirectory(title=_("select_output_dir"))
         if directory:
             self.output_var.set(directory)
 
     def _apply_voice_priority(self) -> None:
-        """Apply voice priority template (now uses default config)."""
-        # 现在默认配置已经是优化后的参数
+        """Apply voice priority template."""
         self.quality_var.set("pro")
         self.enhance_var.set("off")
         self.vad_var.set("sensitive")
         self.vad_enabled_var.set(False)
-        self._log_message("已应用优化后的默认配置（人声优先）")
+        self._log_message(_("applied_voice_priority"))
 
     def _create_config_from_ui(self) -> Config:
         """Create Config object from UI values."""
@@ -625,6 +690,7 @@ class VideoSubtitleGUI(ctk.CTk):
         config.vad_profile = VADProfile(self.vad_var.get())
         config.use_vad = self.vad_enabled_var.get()
         config.overwrite = self.overwrite_var.get()
+        config.language = self.config.language
 
         Config.apply_quality_mode(config, config.quality_mode)
         Config.apply_vad_profile(config, config.vad_profile)
@@ -634,14 +700,13 @@ class VideoSubtitleGUI(ctk.CTk):
     def _start_processing(self) -> None:
         """Start processing video files."""
         if not self.video_files:
-            messagebox.showwarning("警告", "请先添加视频文件")
+            messagebox.showwarning(_("warning"), _("please_add_files"))
             return
 
         self.is_processing = True
         self.start_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
         
-        # 重置计时和日志
         self._reset_timing()
         self._start_time = time.time()
 
@@ -657,7 +722,6 @@ class VideoSubtitleGUI(ctk.CTk):
                 0,
                 lambda: self.progress_label.configure(text=f"{progress:5.1f}% - {stage}"),
             )
-            # 记录步骤信息并更新显示
             self.after(0, lambda: self._record_step(stage, progress))
 
         self.processor.set_progress_callback(progress_callback)
@@ -675,7 +739,7 @@ class VideoSubtitleGUI(ctk.CTk):
                     )
                     self.after(
                         0,
-                        lambda: self._log_message(f"字幕已保存：{output_path}"),
+                        lambda: self._log_message(_("subtitle_saved", path=output_path)),
                     )
                 else:
                     output_dir = self.output_var.get() or str(
@@ -687,7 +751,7 @@ class VideoSubtitleGUI(ctk.CTk):
                     self.after(
                         0,
                         lambda: self._log_message(
-                            f"批量处理完成：{len(results)} 个文件"
+                            _("batch_complete", count=len(results))
                         ),
                     )
                     for video_path, subtitle_path in results:
@@ -709,9 +773,9 @@ class VideoSubtitleGUI(ctk.CTk):
         thread.start()
 
     def _stop_processing(self) -> None:
-        """Stop processing (placeholder)."""
+        """Stop processing."""
         self.is_processing = False
-        self._log_message("处理已停止")
+        self._log_message(_("processing_stopped"))
         self._processing_complete()
 
     def _processing_complete(self) -> None:
@@ -720,41 +784,36 @@ class VideoSubtitleGUI(ctk.CTk):
         self.start_btn.configure(state="normal")
         self.stop_btn.configure(state="disabled")
         self.progress_bar.set(1)
-        self.progress_label.configure(text="处理完成")
+        self.progress_label.configure(text=_("processing_complete"))
         
-        # 更新最终时间
         if self._start_time:
             total_time = time.time() - self._start_time
-            self.total_time_label.configure(text=f"总用时：{total_time:.1f}s")
-            self._log_message(f"✅ 处理完成，总用时：{total_time:.1f}s")
+            self.total_time_label.configure(text=_("total_time", time=f"{total_time:.1f}"))
+            self._log_message(_("processing_complete_msg", time=f"{total_time:.1f}"))
             self._update_steps_display()
 
         config = self._create_config_from_ui()
         self.config_manager.save_config(config)
 
     def _log_message(self, message: str) -> None:
-        """Log message to output panel with color coding."""
+        """Log message to output panel."""
         self.process_log_text.configure(state="normal")
         timestamp = time.strftime("%H:%M:%S")
         
-        # 确定消息类型和对应颜色
         msg_color = self.COLORS["text"]
         
-        if "✅" in message or "成功" in message or "完成" in message:
+        if "✅" in message or _("processing_complete") in message or _("asr_complete").split()[0] in message:
             msg_color = self.COLORS["success"]
         elif "❌" in message or "错误" in message or "Error" in message or "Exception" in message:
             msg_color = self.COLORS["danger"]
-        elif "⚠️" in message or "警告" in message or "Warning" in message:
+        elif "⚠️" in message or _("warning") in message:
             msg_color = self.COLORS["warning"]
-        elif "ℹ️" in message or "🔍" in message or "📥" in message or "📊" in message or "检测" in message or "正在" in message:
+        elif "ℹ️" in message or "🔍" in message or "📥" in message or "📊" in message:
             msg_color = self.COLORS["primary"]
         
-        # 添加时间戳（灰色）
         self.process_log_text.insert("end", f"[{timestamp}] ", ("timestamp",))
-        # 添加消息主体（带颜色）
         self.process_log_text.insert("end", f"{message}\n", ("message",))
         
-        # 配置标签
         self.process_log_text.tag_config("timestamp", foreground=self.COLORS["text_dim"])
         self.process_log_text.tag_config("message", foreground=msg_color)
         
@@ -762,45 +821,23 @@ class VideoSubtitleGUI(ctk.CTk):
         self.process_log_text.see("end")
     
     def _record_step(self, stage: str, progress: float) -> None:
-        """Record step timing information from progress callback."""
+        """Record step timing."""
         current_time = time.time()
         
-        # 从阶段文本中提取步骤名称（去除时间信息）
         step_name = stage.split('|')[0].strip()
         
-        # 如果开始新步骤，记录开始时间
         if step_name != self._current_step:
-            # 结束上一个步骤
             if self._current_step and self._current_step in self._step_times:
                 start_time, _ = self._step_times[self._current_step]
                 self._step_times[self._current_step] = (start_time, current_time)
             
-            # 开始新步骤
             self._current_step = step_name
             self._step_times[step_name] = (current_time, None)
         
-        # 更新显示
         self._update_steps_display()
     
-    def _log_process_step(self, step_name: str, message: str) -> None:
-        """Log a process step with timing."""
-        current_time = time.time()
-        
-        # 如果开始新步骤，记录开始时间
-        if step_name != self._current_step:
-            # 结束上一个步骤
-            if self._current_step and self._current_step in self._step_times:
-                start_time, _ = self._step_times[self._current_step]
-                self._step_times[self._current_step] = (start_time, current_time)
-            
-            # 开始新步骤
-            self._current_step = step_name
-            self._step_times[step_name] = (current_time, None)
-        
-        self._log_message(f"{step_name}: {message}")
-    
     def _update_steps_display(self) -> None:
-        """Update the steps timing display with enhanced visuals."""
+        """Update the steps timing display."""
         self.steps_text.configure(state="normal")
         self.steps_text.delete("1.0", "end")
         
@@ -808,7 +845,6 @@ class VideoSubtitleGUI(ctk.CTk):
         completed_steps = []
         current_step_info = None
         
-        # 收集步骤信息
         for step_name, (start_time, end_time) in self._step_times.items():
             if end_time is not None:
                 duration = end_time - start_time
@@ -818,35 +854,30 @@ class VideoSubtitleGUI(ctk.CTk):
                 current_duration = time.time() - start_time
                 current_step_info = (step_name, current_duration, False)
         
-        # 计算预估总时间
         estimated_total = total_time
         if current_step_info:
             estimated_total += current_step_info[1]
         
-        # 显示完成的步骤
         step_icons = {
-            "加载模型": "🧠",
-            "提取音频": "🎵",
-            "语音识别": "🎙️",
-            "生成字幕": "📝",
-            "保存字幕": "💾",
-            "处理": "⚡",
+            _("load_model"): "🧠",
+            _("extract_audio"): "🎵",
+            _("speech_recognition"): "🎙️",
+            _("generate_subtitle"): "📝",
+            _("save_subtitle"): "💾",
+            _("processing"): "⚡",
         }
         
         for step_name, duration, is_completed in completed_steps:
             icon = step_icons.get(step_name, "✅")
             percentage = (duration / estimated_total * 100) if estimated_total > 0 else 0
             
-            # 进度条
             bar_length = 40
             filled = int(bar_length * (duration / estimated_total)) if estimated_total > 0 else 0
             bar = "▓" * filled + "░" * (bar_length - filled)
             
-            # 插入带样式的文本
             self.steps_text.insert("end", f"{icon} {step_name}\n", ("step_title",))
             self.steps_text.insert("end", f"   {bar} {percentage:4.1f}%  {duration:5.1f}s\n", ("step_detail",))
         
-        # 显示当前进行中的步骤
         if current_step_info:
             step_name, duration, is_completed = current_step_info
             icon = step_icons.get(step_name, "🔄")
@@ -856,20 +887,17 @@ class VideoSubtitleGUI(ctk.CTk):
             filled = int(bar_length * (duration / estimated_total)) if estimated_total > 0 else 0
             bar = "▓" * filled + "▒" + "░" * (bar_length - filled - 1)
             
-            self.steps_text.insert("end", f"\n{icon} {step_name} (进行中)\n", ("current_title",))
+            self.steps_text.insert("end", f"\n{icon} {step_name}{_('current_step')}\n", ("current_title",))
             self.steps_text.insert("end", f"   {bar} {percentage:4.1f}%  {duration:5.1f}s\n", ("current_detail",))
         
-        # 显示总计
         if estimated_total > 0:
             self.steps_text.insert("end", "\n" + "─" * 55 + "\n", ("divider",))
             
             total_icon = "⏱️"
-            self.steps_text.insert("end", f"{total_icon} 总用时：{estimated_total:.1f}s\n", ("total",))
+            self.steps_text.insert("end", f"{total_icon} {_('total_elapsed', time=f'{estimated_total:.1f}')}\n", ("total",))
             
-            # 更新顶部总时间标签
-            self.total_time_label.configure(text=f"⏱️ 总用时：{estimated_total:.1f}s")
+            self.total_time_label.configure(text=_("total_time", time=f"{estimated_total:.1f}"))
         
-        # 配置标签样式
         self.steps_text.tag_config("step_title", foreground=self.COLORS["success"], font=("Segoe UI", 11, "bold"))
         self.steps_text.tag_config("step_detail", foreground=self.COLORS["text_dim"], font=("Consolas", 10))
         self.steps_text.tag_config("current_title", foreground=self.COLORS["primary"], font=("Segoe UI", 11, "bold"))
@@ -885,7 +913,7 @@ class VideoSubtitleGUI(ctk.CTk):
         self._start_time = None
         self._step_times.clear()
         self._current_step = None
-        self.total_time_label.configure(text="⏱️ 总用时：0.0s")
+        self.total_time_label.configure(text=_("total_time", time="0.0"))
         self.process_log_text.configure(state="normal")
         self.process_log_text.delete("1.0", "end")
         self.process_log_text.configure(state="disabled")

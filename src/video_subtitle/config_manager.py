@@ -93,6 +93,7 @@ class ConfigManager:
             "subtitle_format": config.subtitle_format.value,
             "overwrite": config.overwrite,
             "use_vad": config.use_vad,
+            "language": config.language,
         }
 
     def _dict_to_config(self, config_dict: dict) -> Config:
@@ -147,6 +148,7 @@ class ConfigManager:
             ),
             overwrite=config_dict.get("overwrite", False),
             use_vad=config_dict.get("use_vad", True),
+            language=config_dict.get("language"),
         )
 
         return config

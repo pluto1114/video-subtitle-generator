@@ -128,6 +128,7 @@ class Config:
     subtitle_format: SubtitleFormat = SubtitleFormat.SRT
     overwrite: bool = False
     use_vad: bool = False
+    language: Optional[str] = None
 
     @classmethod
     def apply_quality_mode(cls, config: "Config", mode: QualityMode) -> "Config":

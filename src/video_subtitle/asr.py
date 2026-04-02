@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Optional
 from .subtitle import Subtitle
 from .config import ModelConfig
+from .i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,7 @@ class FasterWhisperEngine(ASREngine):
             import warnings
             import sys
             
-            logger.info("🔍 正在检查硬件环境...")
+            logger.info(_("checking_hardware"))
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", message=".*_ARRAY_API.*")
                 warnings.filterwarnings("ignore", message=".*Failed to initialize NumPy.*")
@@ -121,47 +122,47 @@ class FasterWhisperEngine(ASREngine):
                 if self.device == "auto":
                     if cuda_available:
                         self._actual_device = "cuda"
-                        logger.info(f"✅ 检测到 GPU: {torch.cuda.get_device_name(0)}")
-                        logger.info("🚀 将使用 GPU 加速")
+                        logger.info(_("gpu_detected", name=torch.cuda.get_device_name(0)))
+                        logger.info(_("using_gpu"))
                     else:
                         self._actual_device = "cpu"
-                        logger.info("⚠️  未检测到 GPU")
-                        logger.info("💻 将降级使用 CPU 运行（速度较慢）")
+                        logger.info(_("no_gpu"))
+                        logger.info(_("using_cpu_fallback"))
                         self.compute_type = "int8"
-                        logger.info(f"📊 计算精度已自动调整为：{self.compute_type}")
+                        logger.info(_("compute_type_adjusted", type=self.compute_type))
                 elif self.device == "cuda":
                     if not cuda_available:
-                        logger.warning("⚠️  用户指定使用 GPU，但 GPU 不可用")
-                        logger.warning("💻 降级使用 CPU 运行（速度较慢）")
+                        logger.warning(_("user_specified_gpu_unavailable"))
+                        logger.warning(_("using_cpu_fallback"))
                         self._actual_device = "cpu"
                         self.compute_type = "int8"
-                        logger.info(f"📊 计算精度已自动调整为：{self.compute_type}")
+                        logger.info(_("compute_type_adjusted", type=self.compute_type))
                     else:
                         self._actual_device = "cuda"
-                        logger.info(f"✅ GPU 可用：{torch.cuda.get_device_name(0)}")
+                        logger.info(_("gpu_available", name=torch.cuda.get_device_name(0)))
                 elif self.device == "cpu":
                     self._actual_device = "cpu"
                     if cuda_available:
-                        logger.info("ℹ️  用户指定使用 CPU，尽管 GPU 可用")
+                        logger.info(_("user_specified_cpu"))
                     else:
-                        logger.info("💻 使用 CPU 运行")
+                        logger.info(_("using_cpu"))
                 else:
                     self._actual_device = self.device
                 
-                logger.info("📥 正在加载 faster-whisper 模型...")
+                logger.info(_("loading_model"))
                 from faster_whisper import WhisperModel
 
             model_path = model_path or self.model_name
-            logger.info(f"模型名称：{model_path}")
-            logger.info(f"设备：{self._actual_device}")
-            logger.info(f"计算精度：{self.compute_type}")
+            logger.info(_("model_name", name=model_path))
+            logger.info(_("device", device=self._actual_device))
+            logger.info(_("compute_type", type=self.compute_type))
             
             self.model = WhisperModel(
                 model_path,
                 device=self._actual_device,
                 compute_type=self.compute_type,
             )
-            logger.info("✅ 模型加载成功")
+            logger.info(_("model_loaded"))
         except ImportError:
             raise ImportError(
                 "faster-whisper is not installed. Please install it with: pip install faster-whisper"
@@ -182,17 +183,17 @@ class FasterWhisperEngine(ASREngine):
                 download_info = ModelConfig.get_model_download_info(self.model_name)
                 
                 raise RuntimeError(
-                    f"无法在线下载 faster-whisper 模型：{self.model_name}\n\n"
-                    f"错误信息：{error_msg}\n\n"
-                    f"=== 手动下载解决方案 ===\n\n"
-                    f"请按照以下步骤手动下载模型并放置到正确位置：\n\n"
-                    f"1. 选择下载源（推荐按顺序尝试）：\n"
+                    f"{_('model_download_error', name=self.model_name)}\n\n"
+                    f"{_('error_msg', msg=error_msg)}\n\n"
+                    f"{_('manual_download')}\n\n"
+                    f"{_('download_steps')}\n\n"
+                    f"{_('step1')}\n"
                     f"   - Hugging Face: {download_info['huggingface']}\n"
                     f"   - ModelScope (国内镜像): {download_info['modelscope']}\n"
                     f"   - GitHub Releases: {download_info['github_release']}\n\n"
-                    f"2. 下载完成后，将模型文件解压到以下目录：\n"
+                    f"{_('step2')}\n"
                     f"   {local_model_path}\n\n"
-                    f"3. 确保目录结构如下：\n"
+                    f"{_('step3')}\n"
                     f"   models/\n"
                     f"   └── faster-whisper-{self.model_name}/\n"
                     f"       ├── config.json\n"
@@ -201,8 +202,8 @@ class FasterWhisperEngine(ASREngine):
                     f"       ├── tokenizer.json\n"
                     f"       ├── vocabulary.json\n"
                     f"       └── merges.txt\n\n"
-                    f"4. 重新运行程序，系统将自动从本地加载模型\n\n"
-                    f"模型说明：{download_info['description']}\n"
+                    f"{_('step4')}\n\n"
+                    f"{_('model_description', desc=download_info['description'])}\n"
                 )
             else:
                 raise
@@ -219,11 +220,11 @@ class FasterWhisperEngine(ASREngine):
 
         lang = None if language == "auto" else language
         
-        logger.info(f"🎙️ 开始语音识别...")
-        logger.info(f"音频文件：{Path(audio_path).name}")
-        logger.info(f"语言设置：{language}")
+        logger.info(_("starting_asr"))
+        logger.info(_("audio_file", name=Path(audio_path).name))
+        logger.info(_("lang_setting", lang=language))
         if self.vad_filter:
-            logger.info("VAD 过滤：已启用")
+            logger.info(_("vad_enabled"))
 
         segments, info = self.model.transcribe(
             audio_path,
@@ -240,7 +241,7 @@ class FasterWhisperEngine(ASREngine):
             prompt_reset_on_temperature=self.prompt_reset_on_temperature,
         )
         
-        logger.info(f"📊 检测到的语言：{info.language} (概率：{info.language_probability:.2%})")
+        logger.info(_("detected_language", lang=info.language, prob=info.language_probability))
 
         subtitle = Subtitle(title="Video Subtitle")
         segment_count = 0
@@ -255,7 +256,7 @@ class FasterWhisperEngine(ASREngine):
             )
             segment_count += 1
         
-        logger.info(f"✅ 语音识别完成，共 {segment_count} 个片段")
+        logger.info(_("asr_complete", count=segment_count))
 
         return subtitle
 
@@ -264,7 +265,7 @@ class FasterWhisperEngine(ASREngine):
         if self.model is None:
             self.load_model()
 
-        logger.info(f"🔍 正在进行语言检测...")
+        logger.info(_("detecting_language"))
         _, info = self.model.transcribe(audio_path, language="auto")
-        logger.info(f"✅ 检测到语言：{info.language} (概率：{info.language_probability:.2%})")
+        logger.info(_("detected_lang", lang=info.language, prob=info.language_probability))
         return info.language
