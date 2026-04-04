@@ -673,7 +673,7 @@ class VideoSubtitleGUI(ctk.CTk):
         """Apply voice priority template."""
         self.quality_var.set("pro")
         self.enhance_var.set("voice")
-        self.vad_var.set("ultra_sensitive")
+        self.vad_var.set("sensitive")
         self.vad_enabled_var.set(False)
         self._log_message(_("applied_voice_priority"))
 
@@ -694,6 +694,7 @@ class VideoSubtitleGUI(ctk.CTk):
 
         Config.apply_quality_mode(config, config.quality_mode)
         Config.apply_vad_profile(config, config.vad_profile)
+        Config.apply_audio_enhance_profile(config, config.audio_enhance_profile)
 
         return config
 

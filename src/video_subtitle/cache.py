@@ -32,22 +32,22 @@ class ModelCache:
         self,
         engine_type: str,
         model_name: str = "large-v3-turbo",
-        device: str = "auto",
+        device: str = "cuda",
         compute_type: str = "float16",
         local_model_path: Optional[str] = None,
         vad_filter: bool = True,
         vad_parameters: Optional[dict] = None,
-        beam_size: int = 10,
-        best_of: int = 10,
+        beam_size: int = 5,
+        best_of: int = 5,
         temperature: float = 0.0,
         length_penalty: float = 1.0,
-        no_speech_threshold: float = 0.2,
+        no_speech_threshold: float = 0.6,
         compression_ratio_threshold: float = 2.4,
         condition_on_previous_text: bool = True,
         prompt_reset_on_temperature: float = 0.5,
     ) -> ASREngine:
         """Get model from cache or load it if not present."""
-        cache_key = f"{engine_type}:{model_name}:{device}:{compute_type}:{local_model_path}:{vad_filter}:{vad_parameters}:{beam_size}:{best_of}:{temperature}:{length_penalty}:{no_speech_threshold}:{compression_ratio_threshold}:{condition_on_previous_text}:{prompt_reset_on_temperature}"
+        cache_key = f"{engine_type}:{model_name}:{device}:{compute_type}:{local_model_path}:{vad_filter}:{vad_parameters}:{beam_size}:{best_of}:{temperature}"
 
         with self._cache_lock:
             if cache_key in self._cache:

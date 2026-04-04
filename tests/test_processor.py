@@ -46,17 +46,14 @@ class TestVideoProcessor:
             with patch.object(processor, "_load_asr_engine"):
                 with patch.object(processor.audio_processor, 'extract_audio') as mock_extract:
                     mock_extract.return_value = str(Path(tmpdir) / "audio.wav")
-                    
-                    with patch.object(processor.audio_processor, 'enhance_audio') as mock_enhance:
-                        mock_enhance.return_value = str(Path(tmpdir) / "audio.wav")
 
-                        with patch.object(processor, 'asr_engine') as mock_engine:
-                            mock_engine.transcribe.return_value = mock_subtitle
+                    with patch.object(processor, 'asr_engine') as mock_engine:
+                        mock_engine.transcribe.return_value = mock_subtitle
 
-                            subtitle = processor.process_video(str(video_path))
+                        subtitle = processor.process_video(str(video_path))
 
-                            assert isinstance(subtitle, Subtitle)
-                            assert len(subtitle.segments) == 1
+                        assert isinstance(subtitle, Subtitle)
+                        assert len(subtitle.segments) == 1
 
     def test_set_progress_callback(self, processor):
         """Test setting progress callback."""

@@ -44,25 +44,11 @@ class SubtitleFormat(str, Enum):
 class VADConfig:
     """VAD configuration settings."""
 
-    voice_enhance_threshold: float = 0.1
-    vad_min_silence_ms: int = 20
-    vad_speech_pad_ms: int = 100
-    vad_min_speech_ms: int = 10
+    voice_enhance_threshold: float = 0.05
+    vad_min_silence_ms: int = 10
+    vad_speech_pad_ms: int = 200
+    vad_min_speech_ms: int = 5
     vad_max_speech_s: float = 60.0
-
-
-@dataclass
-class ASRConfig:
-    """ASR engine configuration."""
-
-    beam_size: int = 10
-    best_of: int = 10
-    temperature: float = 0.0
-    length_penalty: float = 1.0
-    no_speech_threshold: float = 0.2
-    compression_ratio_threshold: float = 2.4
-    condition_on_previous_text: bool = True
-    prompt_reset_on_temperature: float = 0.5
 
 
 @dataclass
@@ -74,7 +60,6 @@ class ModelConfig:
     device: str = "auto"
     compute_type: str = "float16"
     language: str = "auto"
-    asr_config: ASRConfig = field(default_factory=ASRConfig)
 
     @staticmethod
     def get_model_download_info(model_name: str = "large-v3-turbo") -> dict:
@@ -135,8 +120,8 @@ class Config:
     """Main configuration for video subtitle generation."""
 
     quality_mode: QualityMode = QualityMode.PRO
-    audio_enhance_profile: AudioEnhanceProfile = AudioEnhanceProfile.VOICE
-    vad_profile: VADProfile = VADProfile.ULTRA_SENSITIVE
+    audio_enhance_profile: AudioEnhanceProfile = AudioEnhanceProfile.OFF
+    vad_profile: VADProfile = VADProfile.SENSITIVE
     vad_config: VADConfig = field(default_factory=VADConfig)
     model_config: ModelConfig = field(default_factory=ModelConfig)
     output_dir: Optional[str] = None
@@ -150,22 +135,22 @@ class Config:
         """Apply quality mode preset to configuration."""
         if mode == QualityMode.PRO:
             config.vad_profile = VADProfile.SENSITIVE
-            config.audio_enhance_profile = AudioEnhanceProfile.OFF
-            config.vad_config.vad_min_speech_ms = 30
+            config.audio_enhance_profile = AudioEnhanceProfile.VOICE
+            config.vad_config.vad_min_speech_ms = 10
             config.vad_config.vad_max_speech_s = 60.0
-            config.vad_config.voice_enhance_threshold = 0.2
-            config.vad_config.vad_min_silence_ms = 50
-            config.vad_config.vad_speech_pad_ms = 40
+            config.vad_config.voice_enhance_threshold = 0.08
+            config.vad_config.vad_min_silence_ms = 30
+            config.vad_config.vad_speech_pad_ms = 200
             config.use_vad = False
         elif mode == QualityMode.QUALITY:
             config.vad_profile = VADProfile.BALANCED
             config.audio_enhance_profile = AudioEnhanceProfile.VOICE
-            config.vad_config.vad_min_speech_ms = 50
-            config.vad_config.vad_max_speech_s = 40.0
+            config.vad_config.vad_min_speech_ms = 15
+            config.vad_config.vad_max_speech_s = 50.0
         elif mode == QualityMode.SPEED:
             config.vad_profile = VADProfile.FAST
             config.audio_enhance_profile = AudioEnhanceProfile.OFF
-            config.vad_config.vad_min_speech_ms = 100
+            config.vad_config.vad_min_speech_ms = 50
             config.vad_config.vad_max_speech_s = 30.0
 
         config.quality_mode = mode
@@ -175,42 +160,43 @@ class Config:
     def apply_vad_profile(cls, config: "Config", profile: VADProfile) -> "Config":
         """Apply VAD profile preset to configuration."""
         if profile == VADProfile.VOICE_FOCUS:
-            config.vad_config.voice_enhance_threshold = 0.3
-            config.vad_config.vad_min_silence_ms = 200
-            config.vad_config.vad_speech_pad_ms = 30
-            config.vad_config.vad_min_speech_ms = 100
-            config.vad_config.vad_max_speech_s = 20.0
-        elif profile == VADProfile.BALANCED:
-            config.vad_config.voice_enhance_threshold = 0.3
-            config.vad_config.vad_min_silence_ms = 100
-            config.vad_config.vad_speech_pad_ms = 30
-            config.vad_config.vad_min_speech_ms = 50
+            config.vad_config.voice_enhance_threshold = 0.1
+            config.vad_config.vad_min_silence_ms = 50
+            config.vad_config.vad_speech_pad_ms = 150
+            config.vad_config.vad_min_speech_ms = 20
             config.vad_config.vad_max_speech_s = 40.0
+        elif profile == VADProfile.BALANCED:
+            config.vad_config.voice_enhance_threshold = 0.15
+            config.vad_config.vad_min_silence_ms = 80
+            config.vad_config.vad_speech_pad_ms = 180
+            config.vad_config.vad_min_speech_ms = 15
+            config.vad_config.vad_max_speech_s = 50.0
         elif profile == VADProfile.NOISE_ROBUST:
-            config.vad_config.voice_enhance_threshold = 0.7
-            config.vad_config.vad_min_silence_ms = 400
-            config.vad_config.vad_speech_pad_ms = 10
-            config.vad_config.vad_min_speech_ms = 300
+            config.vad_config.voice_enhance_threshold = 0.4
+            config.vad_config.vad_min_silence_ms = 200
+            config.vad_config.vad_speech_pad_ms = 100
+            config.vad_config.vad_min_speech_ms = 100
             config.vad_config.vad_max_speech_s = 30.0
         elif profile == VADProfile.FAST:
-            config.vad_config.voice_enhance_threshold = 0.6
-            config.vad_config.vad_min_silence_ms = 150
-            config.vad_config.vad_speech_pad_ms = 15
-            config.vad_config.vad_min_speech_ms = 100
+            config.vad_config.voice_enhance_threshold = 0.3
+            config.vad_config.vad_min_silence_ms = 100
+            config.vad_config.vad_speech_pad_ms = 100
+            config.vad_config.vad_min_speech_ms = 50
             config.vad_config.vad_max_speech_s = 30.0
         elif profile == VADProfile.SENSITIVE:
-            config.vad_config.voice_enhance_threshold = 0.2
-            config.vad_config.vad_min_silence_ms = 50
-            config.vad_config.vad_speech_pad_ms = 40
-            config.vad_config.vad_min_speech_ms = 30
+            config.vad_config.voice_enhance_threshold = 0.08
+            config.vad_config.vad_min_silence_ms = 30
+            config.vad_config.vad_speech_pad_ms = 200
+            config.vad_config.vad_min_speech_ms = 10
             config.vad_config.vad_max_speech_s = 60.0
             config.use_vad = False
         elif profile == VADProfile.ULTRA_SENSITIVE:
-            config.vad_config.voice_enhance_threshold = 0.01
-            config.vad_config.vad_min_silence_ms = 50
-            config.vad_config.vad_speech_pad_ms = 100
-            config.vad_config.vad_min_speech_ms = 10
-            config.vad_config.vad_max_speech_s = 25.0
+            config.vad_config.voice_enhance_threshold = 0.03
+            config.vad_config.vad_min_silence_ms = 20
+            config.vad_config.vad_speech_pad_ms = 250
+            config.vad_config.vad_min_speech_ms = 5
+            config.vad_config.vad_max_speech_s = 60.0
+            config.use_vad = False
 
         config.vad_profile = profile
         return config
@@ -225,6 +211,15 @@ class Config:
 
     @classmethod
     def voice_priority_template(cls) -> "Config":
-        """Create a configuration with voice priority template (deprecated - now uses default config)."""
-        # 注意：此方法已弃用，因为默认配置已使用优化后的参数
-        return cls()
+        """Create a configuration with voice priority template."""
+        config = cls()
+        config.quality_mode = QualityMode.PRO
+        config.audio_enhance_profile = AudioEnhanceProfile.VOICE
+        config.vad_profile = VADProfile.SENSITIVE
+        config.vad_config.vad_min_speech_ms = 10
+        config.vad_config.vad_max_speech_s = 60.0
+        config.vad_config.voice_enhance_threshold = 0.08
+        config.vad_config.vad_min_silence_ms = 30
+        config.vad_config.vad_speech_pad_ms = 200
+        config.use_vad = False
+        return config

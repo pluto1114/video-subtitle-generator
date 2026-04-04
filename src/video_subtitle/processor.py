@@ -152,7 +152,6 @@ class VideoProcessor:
         logger.info(f"模型名称：{self.config.model_config.model_name}")
         logger.info(f"设备：{self.config.model_config.device}")
         
-        asr_config = self.config.model_config.asr_config
         self.asr_engine = self.model_cache.get_or_load(
             engine_type=engine_type,
             model_name=self.config.model_config.model_name,
@@ -161,14 +160,14 @@ class VideoProcessor:
             local_model_path=self.config.model_config.local_model_path,
             vad_filter=self.config.use_vad,
             vad_parameters=vad_parameters if self.config.use_vad else None,
-            beam_size=asr_config.beam_size,
-            best_of=asr_config.best_of,
-            temperature=asr_config.temperature,
-            length_penalty=asr_config.length_penalty,
-            no_speech_threshold=asr_config.no_speech_threshold,
-            compression_ratio_threshold=asr_config.compression_ratio_threshold,
-            condition_on_previous_text=asr_config.condition_on_previous_text,
-            prompt_reset_on_temperature=asr_config.prompt_reset_on_temperature,
+            beam_size=5,
+            best_of=5,
+            temperature=0.0,
+            length_penalty=1.0,
+            no_speech_threshold=0.6,
+            compression_ratio_threshold=2.4,
+            condition_on_previous_text=False,
+            prompt_reset_on_temperature=0.5,
         )
         logger.info(f"✅ ASR 引擎初始化成功：{engine_type}")
 

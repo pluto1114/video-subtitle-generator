@@ -175,12 +175,14 @@ class AudioProcessor:
         if profile in [AudioEnhanceProfile.VOICE, AudioEnhanceProfile.STRONG]:
             filters.append("highpass=f=60")
             filters.append("lowpass=f=4000")
+            filters.append("acompressor=threshold=0.05:ratio=3:attack=100:release=800")
+            filters.append("volume=1.5")
 
         if profile == AudioEnhanceProfile.STRONG:
-            filters.append("acompressor=threshold=0.089:ratio=6:attack=200:release=1000")
-            filters.append("loudnorm=I=-16:TP=-1.5:LRA=11")
-            filters.append("equalizer=f=200:width_type=o:width=2:g=3")
-            filters.append("equalizer=f=1000:width_type=o:width=2:g=2")
+            filters.append("loudnorm=I=-14:TP=-1:LRA=7")
+            filters.append("equalizer=f=200:width_type=o:width=2:g=4")
+            filters.append("equalizer=f=1000:width_type=o:width=2:g=3")
+            filters.append("equalizer=f=3000:width_type=o:width=2:g=2")
 
         return ",".join(filters) if filters else "anull"
 

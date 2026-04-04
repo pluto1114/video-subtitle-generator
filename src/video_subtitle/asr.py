@@ -78,13 +78,13 @@ class FasterWhisperEngine(ASREngine):
         compute_type: str = "float16",
         vad_filter: bool = True,
         vad_parameters: Optional[dict] = None,
-        beam_size: int = 10,
-        best_of: int = 10,
+        beam_size: int = 5,
+        best_of: int = 5,
         temperature: float = 0.0,
         length_penalty: float = 1.0,
-        no_speech_threshold: float = 0.2,
+        no_speech_threshold: float = 0.6,
         compression_ratio_threshold: float = 2.4,
-        condition_on_previous_text: bool = True,
+        condition_on_previous_text: bool = False,
         prompt_reset_on_temperature: float = 0.5,
     ):
         self.model_name = model_name
