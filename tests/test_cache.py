@@ -97,7 +97,10 @@ class TestModelCache:
 
         assert cache.get_stats()["cached_models"] == 2
 
-        result = cache.remove("mock:model1:cuda:float16:None:True:None:5:5:0.0")
+        keys = cache.get_cached_keys()
+        assert len(keys) == 2
+        
+        result = cache.remove(keys[0])
         assert result is True
         assert cache.get_stats()["cached_models"] == 1
 
@@ -114,8 +117,12 @@ class TestModelCache:
 
         keys = cache.get_cached_keys()
         assert len(keys) == 2
-        assert "mock:model1:cuda:float16:None:True:None:5:5:0.0" in keys
-        assert "mock:model2:cuda:float16:None:True:None:5:5:0.0" in keys
+        # 检查 cache_key 包含正确的参数
+        assert "mock:model1:" in keys[0] or "mock:model1:" in keys[1]
+        assert "mock:model2:" in keys[0] or "mock:model2:" in keys[1]
+        # 检查新的默认参数值
+        assert ":10:10:0.0:1.0:0.2:2.4:True:0.5" in keys[0]
+        assert ":10:10:0.0:1.0:0.2:2.4:True:0.5" in keys[1]
 
     def test_invalid_engine_type(self):
         """Test that invalid engine type raises error."""

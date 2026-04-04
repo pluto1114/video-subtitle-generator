@@ -113,22 +113,22 @@ class VideoSubtitleGUI(ctk.CTk):
     def _setup_colors(self) -> None:
         """Setup color scheme."""
         self.COLORS = {
-            "primary": "#6366F1",
-            "primary_hover": "#4F46E5",
-            "success": "#22C55E",
-            "success_hover": "#16A34A",
-            "warning": "#F97316",
-            "warning_hover": "#EA580C",
-            "danger": "#EF4444",
-            "danger_hover": "#DC2626",
-            "neutral": "#6B7280",
-            "neutral_hover": "#4B5563",
-            "bg_dark": "#0F172A",
+            "primary": "#5B8DEE",
+            "primary_hover": "#4A7BD6",
+            "success": "#65C3C8",
+            "success_hover": "#4FB3BA",
+            "warning": "#F0B429",
+            "warning_hover": "#D99D1A",
+            "danger": "#E7766E",
+            "danger_hover": "#D66159",
+            "neutral": "#8B95A1",
+            "neutral_hover": "#718096",
+            "bg_dark": "#121826",
             "bg_medium": "#1E293B",
             "bg_light": "#334155",
             "border": "#475569",
-            "text": "#F8FAFC",
-            "text_dim": "#94A3B8",
+            "text": "#E5E7EB",
+            "text_dim": "#9CA3AF",
         }
 
     def _create_ui(self) -> None:
@@ -672,8 +672,8 @@ class VideoSubtitleGUI(ctk.CTk):
     def _apply_voice_priority(self) -> None:
         """Apply voice priority template."""
         self.quality_var.set("pro")
-        self.enhance_var.set("off")
-        self.vad_var.set("sensitive")
+        self.enhance_var.set("voice")
+        self.vad_var.set("ultra_sensitive")
         self.vad_enabled_var.set(False)
         self._log_message(_("applied_voice_priority"))
 
@@ -898,12 +898,12 @@ class VideoSubtitleGUI(ctk.CTk):
             
             self.total_time_label.configure(text=_("total_time", time=f"{estimated_total:.1f}"))
         
-        self.steps_text.tag_config("step_title", foreground=self.COLORS["success"], font=("Segoe UI", 11, "bold"))
-        self.steps_text.tag_config("step_detail", foreground=self.COLORS["text_dim"], font=("Consolas", 10))
-        self.steps_text.tag_config("current_title", foreground=self.COLORS["primary"], font=("Segoe UI", 11, "bold"))
-        self.steps_text.tag_config("current_detail", foreground=self.COLORS["text"], font=("Consolas", 10))
+        self.steps_text.tag_config("step_title", foreground=self.COLORS["success"])
+        self.steps_text.tag_config("step_detail", foreground=self.COLORS["text_dim"])
+        self.steps_text.tag_config("current_title", foreground=self.COLORS["primary"])
+        self.steps_text.tag_config("current_detail", foreground=self.COLORS["text"])
         self.steps_text.tag_config("divider", foreground=self.COLORS["border"])
-        self.steps_text.tag_config("total", foreground=self.COLORS["primary"], font=("Segoe UI", 12, "bold"))
+        self.steps_text.tag_config("total", foreground=self.COLORS["primary"])
         
         self.steps_text.configure(state="disabled")
         self.steps_text.see("end")

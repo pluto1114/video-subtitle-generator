@@ -12,6 +12,7 @@ from .config import (
     SubtitleFormat,
     VADConfig,
     ModelConfig,
+    ASRConfig,
 )
 
 
@@ -88,6 +89,16 @@ class ConfigManager:
                 "device": config.model_config.device,
                 "compute_type": config.model_config.compute_type,
                 "language": config.model_config.language,
+                "asr_config": {
+                    "beam_size": config.model_config.asr_config.beam_size,
+                    "best_of": config.model_config.asr_config.best_of,
+                    "temperature": config.model_config.asr_config.temperature,
+                    "length_penalty": config.model_config.asr_config.length_penalty,
+                    "no_speech_threshold": config.model_config.asr_config.no_speech_threshold,
+                    "compression_ratio_threshold": config.model_config.asr_config.compression_ratio_threshold,
+                    "condition_on_previous_text": config.model_config.asr_config.condition_on_previous_text,
+                    "prompt_reset_on_temperature": config.model_config.asr_config.prompt_reset_on_temperature,
+                },
             },
             "output_dir": config.output_dir,
             "subtitle_format": config.subtitle_format.value,
@@ -100,19 +111,37 @@ class ConfigManager:
         """Convert dictionary to Config object."""
         vad_config = VADConfig(
             voice_enhance_threshold=config_dict.get("vad_config", {}).get(
-                "voice_enhance_threshold", 0.5
+                "voice_enhance_threshold", 0.1
             ),
             vad_min_silence_ms=config_dict.get("vad_config", {}).get(
-                "vad_min_silence_ms", 250
+                "vad_min_silence_ms", 20
             ),
             vad_speech_pad_ms=config_dict.get("vad_config", {}).get(
-                "vad_speech_pad_ms", 20
+                "vad_speech_pad_ms", 100
             ),
             vad_min_speech_ms=config_dict.get("vad_config", {}).get(
-                "vad_min_speech_ms", 250
+                "vad_min_speech_ms", 10
             ),
             vad_max_speech_s=config_dict.get("vad_config", {}).get(
-                "vad_max_speech_s", 30.0
+                "vad_max_speech_s", 60.0
+            ),
+        )
+
+        asr_config_dict = config_dict.get("model_config", {}).get("asr_config", {})
+        asr_config = ASRConfig(
+            beam_size=asr_config_dict.get("beam_size", 10),
+            best_of=asr_config_dict.get("best_of", 10),
+            temperature=asr_config_dict.get("temperature", 0.0),
+            length_penalty=asr_config_dict.get("length_penalty", 1.0),
+            no_speech_threshold=asr_config_dict.get("no_speech_threshold", 0.2),
+            compression_ratio_threshold=asr_config_dict.get(
+                "compression_ratio_threshold", 2.4
+            ),
+            condition_on_previous_text=asr_config_dict.get(
+                "condition_on_previous_text", True
+            ),
+            prompt_reset_on_temperature=asr_config_dict.get(
+                "prompt_reset_on_temperature", 0.5
             ),
         )
 
@@ -123,22 +152,23 @@ class ConfigManager:
             local_model_path=config_dict.get("model_config", {}).get(
                 "local_model_path"
             ),
-            device=config_dict.get("model_config", {}).get("device", "cuda"),
+            device=config_dict.get("model_config", {}).get("device", "auto"),
             compute_type=config_dict.get("model_config", {}).get(
                 "compute_type", "float16"
             ),
             language=config_dict.get("model_config", {}).get("language", "auto"),
+            asr_config=asr_config,
         )
 
         config = Config(
             quality_mode=QualityMode(
-                config_dict.get("quality_mode", QualityMode.BALANCED.value)
+                config_dict.get("quality_mode", QualityMode.PRO.value)
             ),
             audio_enhance_profile=AudioEnhanceProfile(
-                config_dict.get("audio_enhance_profile", AudioEnhanceProfile.OFF.value)
+                config_dict.get("audio_enhance_profile", AudioEnhanceProfile.VOICE.value)
             ),
             vad_profile=VADProfile(
-                config_dict.get("vad_profile", VADProfile.BALANCED.value)
+                config_dict.get("vad_profile", VADProfile.ULTRA_SENSITIVE.value)
             ),
             vad_config=vad_config,
             model_config=model_config,
@@ -147,7 +177,7 @@ class ConfigManager:
                 config_dict.get("subtitle_format", SubtitleFormat.SRT.value)
             ),
             overwrite=config_dict.get("overwrite", False),
-            use_vad=config_dict.get("use_vad", True),
+            use_vad=config_dict.get("use_vad", False),
             language=config_dict.get("language"),
         )
 

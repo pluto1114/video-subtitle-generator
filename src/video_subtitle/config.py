@@ -44,11 +44,25 @@ class SubtitleFormat(str, Enum):
 class VADConfig:
     """VAD configuration settings."""
 
-    voice_enhance_threshold: float = 0.3
-    vad_min_silence_ms: int = 100
-    vad_speech_pad_ms: int = 30
-    vad_min_speech_ms: int = 50
-    vad_max_speech_s: float = 40.0
+    voice_enhance_threshold: float = 0.1
+    vad_min_silence_ms: int = 20
+    vad_speech_pad_ms: int = 100
+    vad_min_speech_ms: int = 10
+    vad_max_speech_s: float = 60.0
+
+
+@dataclass
+class ASRConfig:
+    """ASR engine configuration."""
+
+    beam_size: int = 10
+    best_of: int = 10
+    temperature: float = 0.0
+    length_penalty: float = 1.0
+    no_speech_threshold: float = 0.2
+    compression_ratio_threshold: float = 2.4
+    condition_on_previous_text: bool = True
+    prompt_reset_on_temperature: float = 0.5
 
 
 @dataclass
@@ -60,6 +74,7 @@ class ModelConfig:
     device: str = "auto"
     compute_type: str = "float16"
     language: str = "auto"
+    asr_config: ASRConfig = field(default_factory=ASRConfig)
 
     @staticmethod
     def get_model_download_info(model_name: str = "large-v3-turbo") -> dict:
@@ -120,8 +135,8 @@ class Config:
     """Main configuration for video subtitle generation."""
 
     quality_mode: QualityMode = QualityMode.PRO
-    audio_enhance_profile: AudioEnhanceProfile = AudioEnhanceProfile.OFF
-    vad_profile: VADProfile = VADProfile.SENSITIVE
+    audio_enhance_profile: AudioEnhanceProfile = AudioEnhanceProfile.VOICE
+    vad_profile: VADProfile = VADProfile.ULTRA_SENSITIVE
     vad_config: VADConfig = field(default_factory=VADConfig)
     model_config: ModelConfig = field(default_factory=ModelConfig)
     output_dir: Optional[str] = None

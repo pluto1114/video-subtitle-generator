@@ -9,6 +9,7 @@ from video_subtitle.config import (
     VADConfig,
     ModelConfig,
     SubtitleFormat,
+    ASRConfig,
 )
 
 
@@ -53,17 +54,46 @@ class TestSubtitleFormat:
         assert SubtitleFormat.ASS.value == "ass"
 
 
+class TestASRConfig:
+    """Test ASRConfig dataclass."""
+
+    def test_default_asr_config(self):
+        """Test default ASR configuration."""
+        config = ASRConfig()
+        assert config.beam_size == 10
+        assert config.best_of == 10
+        assert config.temperature == 0.0
+        assert config.length_penalty == 1.0
+        assert config.no_speech_threshold == 0.2
+        assert config.compression_ratio_threshold == 2.4
+        assert config.condition_on_previous_text is True
+        assert config.prompt_reset_on_temperature == 0.5
+
+    def test_custom_asr_config(self):
+        """Test custom ASR configuration."""
+        config = ASRConfig(
+            beam_size=5,
+            best_of=5,
+            no_speech_threshold=0.6,
+            condition_on_previous_text=False,
+        )
+        assert config.beam_size == 5
+        assert config.best_of == 5
+        assert config.no_speech_threshold == 0.6
+        assert config.condition_on_previous_text is False
+
+
 class TestVADConfig:
     """Test VADConfig dataclass."""
 
     def test_default_vad_config(self):
         """Test default VAD configuration."""
         config = VADConfig()
-        assert config.voice_enhance_threshold == 0.3
-        assert config.vad_min_silence_ms == 100
-        assert config.vad_speech_pad_ms == 30
-        assert config.vad_min_speech_ms == 50
-        assert config.vad_max_speech_s == 40.0
+        assert config.voice_enhance_threshold == 0.1
+        assert config.vad_min_silence_ms == 20
+        assert config.vad_speech_pad_ms == 100
+        assert config.vad_min_speech_ms == 10
+        assert config.vad_max_speech_s == 60.0
 
     def test_custom_vad_config(self):
         """Test custom VAD configuration."""
@@ -91,6 +121,9 @@ class TestModelConfig:
         assert config.local_model_path is not None
         assert "models" in config.local_model_path
         assert "faster-whisper-large-v3-turbo" in config.local_model_path
+        assert config.asr_config is not None
+        assert config.asr_config.beam_size == 10
+        assert config.asr_config.no_speech_threshold == 0.2
 
     def test_custom_model_config(self):
         """Test custom model configuration."""
@@ -117,8 +150,8 @@ class TestConfig:
         """Test default configuration."""
         config = Config()
         assert config.quality_mode == QualityMode.PRO
-        assert config.audio_enhance_profile == AudioEnhanceProfile.OFF
-        assert config.vad_profile == VADProfile.SENSITIVE
+        assert config.audio_enhance_profile == AudioEnhanceProfile.VOICE
+        assert config.vad_profile == VADProfile.ULTRA_SENSITIVE
         assert config.subtitle_format == SubtitleFormat.SRT
         assert config.overwrite is False
         assert config.use_vad is False
@@ -175,10 +208,10 @@ class TestConfig:
         config = Config.voice_priority_template()
 
         assert config.quality_mode == QualityMode.PRO
-        assert config.audio_enhance_profile == AudioEnhanceProfile.OFF
-        assert config.vad_profile == VADProfile.SENSITIVE
-        assert config.vad_config.vad_min_speech_ms == 50
-        assert config.vad_config.voice_enhance_threshold == 0.3
+        assert config.audio_enhance_profile == AudioEnhanceProfile.VOICE
+        assert config.vad_profile == VADProfile.ULTRA_SENSITIVE
+        assert config.vad_config.vad_min_speech_ms == 10
+        assert config.vad_config.voice_enhance_threshold == 0.1
 
     def test_custom_config(self):
         """Test custom configuration."""
