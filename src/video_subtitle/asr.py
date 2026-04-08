@@ -86,6 +86,9 @@ class FasterWhisperEngine(ASREngine):
         compression_ratio_threshold: float = 2.4,
         condition_on_previous_text: bool = False,
         prompt_reset_on_temperature: float = 0.5,
+        word_timestamps: bool = False,
+        max_new_tokens: Optional[int] = None,
+        chunk_length: int = 30,
     ):
         self.model_name = model_name
         self.device = device
@@ -100,6 +103,9 @@ class FasterWhisperEngine(ASREngine):
         self.compression_ratio_threshold = compression_ratio_threshold
         self.condition_on_previous_text = condition_on_previous_text
         self.prompt_reset_on_temperature = prompt_reset_on_temperature
+        self.word_timestamps = word_timestamps
+        self.max_new_tokens = max_new_tokens
+        self.chunk_length = chunk_length
         self.model = None
         self._actual_device = None
 
@@ -239,6 +245,9 @@ class FasterWhisperEngine(ASREngine):
             compression_ratio_threshold=self.compression_ratio_threshold,
             condition_on_previous_text=self.condition_on_previous_text,
             prompt_reset_on_temperature=self.prompt_reset_on_temperature,
+            word_timestamps=self.word_timestamps,
+            max_new_tokens=self.max_new_tokens,
+            chunk_length=self.chunk_length,
         )
         
         logger.info(_("detected_language", lang=info.language, prob=info.language_probability))

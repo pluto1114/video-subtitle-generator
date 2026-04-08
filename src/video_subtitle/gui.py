@@ -17,9 +17,6 @@ except ImportError:
 
 from .config import (
     Config,
-    QualityMode,
-    AudioEnhanceProfile,
-    VADProfile,
     SubtitleFormat,
 )
 from .processor import VideoProcessor
@@ -306,7 +303,6 @@ class VideoSubtitleGUI(ctk.CTk):
 
         row_idx = 1
         row_idx = self._create_basic_config_section(scrollable_frame, row_idx)
-        row_idx = self._create_advanced_config_section(scrollable_frame, row_idx)
 
     def _create_basic_config_section(
         self, parent, start_row: int
@@ -403,88 +399,6 @@ class VideoSubtitleGUI(ctk.CTk):
         output_btn.grid(row=start_row, column=2, padx=0, pady=6)
         start_row += 1
 
-        return start_row
-
-    def _create_advanced_config_section(
-        self, parent, start_row: int
-    ) -> int:
-        """Create advanced configuration section."""
-        advanced_label = ctk.CTkLabel(
-            parent, 
-            text=_("advanced_config"), 
-            font=ctk.CTkFont(weight="bold", size=15),
-            text_color=self.COLORS["primary"]
-        )
-        advanced_label.grid(row=start_row, column=0, sticky="w", pady=(15, 8), columnspan=3)
-        start_row += 1
-
-        quality_label = ctk.CTkLabel(parent, text=_("quality_mode"), text_color=self.COLORS["text_dim"])
-        quality_label.grid(row=start_row, column=0, sticky="w", pady=6)
-        self.quality_var = ctk.StringVar(value=self.config.quality_mode.value)
-        quality_combo = ctk.CTkComboBox(
-            parent,
-            variable=self.quality_var,
-            values=["pro", "quality", "balanced", "speed"],
-            width=320,
-            corner_radius=8,
-        )
-        quality_combo.grid(row=start_row, column=1, padx=12, pady=6, columnspan=2)
-        start_row += 1
-
-        enhance_label = ctk.CTkLabel(parent, text=_("audio_enhance"), text_color=self.COLORS["text_dim"])
-        enhance_label.grid(row=start_row, column=0, sticky="w", pady=6)
-        self.enhance_var = ctk.StringVar(
-            value=self.config.audio_enhance_profile.value
-        )
-        enhance_combo = ctk.CTkComboBox(
-            parent,
-            variable=self.enhance_var,
-            values=["off", "voice", "strong"],
-            width=320,
-            corner_radius=8,
-        )
-        enhance_combo.grid(row=start_row, column=1, padx=12, pady=6, columnspan=2)
-        start_row += 1
-
-        vad_label = ctk.CTkLabel(parent, text=_("vad_config"), text_color=self.COLORS["text_dim"])
-        vad_label.grid(row=start_row, column=0, sticky="w", pady=6)
-        self.vad_var = ctk.StringVar(value=self.config.vad_profile.value)
-        vad_combo = ctk.CTkComboBox(
-            parent,
-            variable=self.vad_var,
-            values=["voice_focus", "balanced", "noise_robust", "fast", "sensitive", "ultra_sensitive"],
-            width=320,
-            corner_radius=8,
-        )
-        vad_combo.grid(row=start_row, column=1, padx=12, pady=6, columnspan=2)
-        start_row += 1
-
-        self.vad_enabled_var = ctk.BooleanVar(value=self.config.use_vad)
-        vad_check = ctk.CTkCheckBox(
-            parent, 
-            text=_("enable_vad"), 
-            variable=self.vad_enabled_var,
-            text_color=self.COLORS["text"],
-            checkbox_width=22,
-            checkbox_height=22,
-            corner_radius=6
-        )
-        vad_check.grid(row=start_row, column=0, columnspan=3, sticky="w", padx=0, pady=8)
-        start_row += 1
-
-        device_label = ctk.CTkLabel(parent, text=_("device_selection"), text_color=self.COLORS["text_dim"])
-        device_label.grid(row=start_row, column=0, sticky="w", pady=6)
-        self.device_var = ctk.StringVar(value=self.config.model_config.device)
-        device_combo = ctk.CTkComboBox(
-            parent,
-            variable=self.device_var,
-            values=["auto", "cuda", "cpu"],
-            width=320,
-            corner_radius=8,
-        )
-        device_combo.grid(row=start_row, column=1, padx=12, pady=6, columnspan=2)
-        start_row += 1
-
         self.overwrite_var = ctk.BooleanVar(value=self.config.overwrite)
         overwrite_check = ctk.CTkCheckBox(
             parent, 
@@ -497,23 +411,6 @@ class VideoSubtitleGUI(ctk.CTk):
         )
         overwrite_check.grid(
             row=start_row, column=0, columnspan=3, sticky="w", padx=0, pady=8
-        )
-        start_row += 1
-
-        voice_priority_btn = ctk.CTkButton(
-            parent,
-            text=_("voice_priority_template"),
-            command=self._apply_voice_priority,
-            width=200,
-            height=36,
-            corner_radius=8,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color=self.COLORS["success"],
-            hover_color=self.COLORS["success_hover"],
-            border_spacing=0
-        )
-        voice_priority_btn.grid(
-            row=start_row, column=0, columnspan=3, padx=0, pady=(12, 5)
         )
         start_row += 1
 
@@ -669,32 +566,15 @@ class VideoSubtitleGUI(ctk.CTk):
         if directory:
             self.output_var.set(directory)
 
-    def _apply_voice_priority(self) -> None:
-        """Apply voice priority template."""
-        self.quality_var.set("pro")
-        self.enhance_var.set("voice")
-        self.vad_var.set("sensitive")
-        self.vad_enabled_var.set(False)
-        self._log_message(_("applied_voice_priority"))
-
     def _create_config_from_ui(self) -> Config:
         """Create Config object from UI values."""
         config = Config()
         config.model_config.model_name = self.model_var.get()
         config.model_config.language = self.lang_var.get()
-        config.model_config.device = self.device_var.get()
         config.subtitle_format = SubtitleFormat(self.format_var.get())
         config.output_dir = self.output_var.get() or None
-        config.quality_mode = QualityMode(self.quality_var.get())
-        config.audio_enhance_profile = AudioEnhanceProfile(self.enhance_var.get())
-        config.vad_profile = VADProfile(self.vad_var.get())
-        config.use_vad = self.vad_enabled_var.get()
         config.overwrite = self.overwrite_var.get()
         config.language = self.config.language
-
-        Config.apply_quality_mode(config, config.quality_mode)
-        Config.apply_vad_profile(config, config.vad_profile)
-        Config.apply_audio_enhance_profile(config, config.audio_enhance_profile)
 
         return config
 

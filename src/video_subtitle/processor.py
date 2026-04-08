@@ -175,14 +175,22 @@ class VideoProcessor:
         """Apply post-processing to the subtitle."""
         logger.info("正在修复时间轴...")
         subtitle.fix_timestamps()
+        
+        logger.info("正在分割长片段...")
+        added_count = subtitle.split_long_segments(max_duration_ms=4000, preferred_duration_ms=2500)
+        if added_count > 0:
+            logger.info(f"分割了 {added_count} 条长片段")
+        
         logger.info("正在移除无效片段...")
         subtitle.remove_invalid_segments(min_duration_ms=30, min_text_length=0)
+        
         logger.info("正在移除拟声词片段...")
         removed_count = subtitle.remove_onomatopoeia_segments()
         if removed_count > 0:
             logger.info(f"移除了 {removed_count} 条拟声词片段")
         else:
             logger.info("无需移除拟声词片段")
+        
         if not subtitle.validate_timestamps():
             logger.warning("⚠️ 字幕时间轴验证失败")
 

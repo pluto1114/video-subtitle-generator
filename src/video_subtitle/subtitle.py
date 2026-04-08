@@ -153,6 +153,77 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 segment.end_ms = segment.start_ms + max(1000, int((segment.end_ms - segment.start_ms) * 10))
             prev_end = segment.end_ms
 
+    def split_long_segments(self, max_duration_ms: int = 5000, preferred_duration_ms: int = 3000) -> int:
+        """Split long subtitle segments into shorter ones.
+        
+        Args:
+            max_duration_ms: Maximum segment duration in milliseconds
+            preferred_duration_ms: Preferred segment duration
+            
+        Returns:
+            Number of segments added
+        """
+        import re
+        
+        new_segments = []
+        added_count = 0
+        
+        for segment in self.segments:
+            duration = segment.duration()
+            
+            if duration <= max_duration_ms:
+                new_segments.append(segment)
+                continue
+            
+            text = segment.text
+            split_points = []
+            
+            split_chars = ['。', '！', '？', '…', '\n', '、', '，', ' ']
+            
+            for i, char in enumerate(text):
+                if char in split_chars:
+                    pos = i + 1
+                    elapsed = (pos / len(text)) * duration
+                    if elapsed > preferred_duration_ms * 0.8 and elapsed < preferred_duration_ms * 1.5:
+                        split_points.append(pos)
+            
+            if not split_points or len(split_points) == 0:
+                mid = len(text) // 2
+                split_points = [mid]
+            
+            start = 0
+            current_start = segment.start_ms
+            for split_point in split_points:
+                part_text = text[start:split_point].strip()
+                if not part_text:
+                    start = split_point
+                    continue
+                
+                part_duration = (len(part_text) / len(text)) * duration
+                part_end = int(current_start + part_duration)
+                
+                new_segments.append(SubtitleSegment(
+                    start_ms=int(current_start),
+                    end_ms=int(part_end),
+                    text=part_text
+                ))
+                
+                current_start = part_end
+                start = split_point
+                added_count += 1
+            
+            remaining = text[split_points[-1]:].strip() if split_points else text[start:].strip()
+            if remaining:
+                new_segments.append(SubtitleSegment(
+                    start_ms=int(current_start),
+                    end_ms=segment.end_ms,
+                    text=remaining
+                ))
+                added_count += 1
+        
+        self.segments = new_segments
+        return added_count
+
     def remove_invalid_segments(self, min_duration_ms: int = 50, min_text_length: int = 0) -> None:
         """Remove segments that are truly invalid.
         
